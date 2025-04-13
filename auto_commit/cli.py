@@ -6,7 +6,7 @@ import subprocess
 import argparse
 from typing import Dict
 
-CONFIG_DIR = os.path.expanduser("~/.config/auto-commit")
+CONFIG_DIR = os.path.expanduser("~/.config/dtl")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 
 # ANSI color codes
@@ -47,7 +47,7 @@ DEFAULT_CONFIG = {
 # Translations for UI messages
 MESSAGES = {
     'en': {
-        'welcome': "Auto-Commit Tool Configuration",
+        'welcome': "DTL (Developer Tool) Configuration",
         'enter_api_key': "Please enter your Gemini API key:",
         'choose_model': "Choose your preferred model:",
         'model_1': "Gemini 2.0 Flash (recommended) - Advanced features, speed",
@@ -89,9 +89,42 @@ Configuration Menu:
         'select_option': "Select an option (1-7):",
         'invalid_option': "Invalid option. Please try again.",
         'save_exit': "Configuration saved. Exiting...",
+        'help_text': """
+🛠️  DTL (Developer Tool) Help
+============================
+
+Available Commands:
+-----------------
+dtl help                     Show this help message
+dtl config                   Configure tool settings
+dtl auto-commit             Generate commit message and handle git operations
+
+Auto-commit Options:
+------------------
+--no-push                   Skip automatic push after commit
+--no-review                 Skip code review before commit
+
+Configuration Options:
+-------------------
+- Interface language (English/Vietnamese)
+- Commit message language
+- AI model selection
+- Auto-push settings
+- Auto-review settings
+- Gemini API key
+
+Examples:
+--------
+dtl auto-commit             Normal commit with review and push
+dtl auto-commit --no-push   Commit without pushing
+dtl config                  Open configuration menu
+dtl help                    Show this help message
+
+For more information, visit: https://github.com/KhanhRomVN/dev_tool
+"""
     },
     'vi': {
-        'welcome': "Cấu Hình Công Cụ Auto-Commit",
+        'welcome': "Cấu Hình DTL (Developer Tool)",
         'enter_api_key': "Vui lòng nhập Gemini API key của bạn:",
         'choose_model': "Chọn model bạn muốn sử dụng:",
         'model_1': "Gemini 2.0 Flash (khuyến nghị) - Tính năng nâng cao, tốc độ nhanh",
@@ -133,6 +166,39 @@ Menu Cấu Hình:
         'select_option': "Chọn một tùy chọn (1-7):",
         'invalid_option': "Tùy chọn không hợp lệ. Vui lòng thử lại.",
         'save_exit': "Đã lưu cấu hình. Đang thoát...",
+        'help_text': """
+🛠️  DTL (Developer Tool) - Trợ Giúp
+==================================
+
+Các Lệnh Có Sẵn:
+---------------
+dtl help                     Hiển thị trợ giúp này
+dtl config                   Cấu hình thiết lập
+dtl auto-commit             Tạo commit message và xử lý git
+
+Tùy Chọn Auto-commit:
+-------------------
+--no-push                   Bỏ qua tự động push sau khi commit
+--no-review                 Bỏ qua review code trước khi commit
+
+Tùy Chọn Cấu Hình:
+----------------
+- Ngôn ngữ giao diện (Tiếng Anh/Tiếng Việt)
+- Ngôn ngữ commit message
+- Lựa chọn model AI
+- Cài đặt tự động push
+- Cài đặt tự động review
+- Gemini API key
+
+Ví Dụ Sử Dụng:
+------------
+dtl auto-commit             Commit bình thường với review và push
+dtl auto-commit --no-push   Commit không push
+dtl config                  Mở menu cấu hình
+dtl help                    Hiển thị trợ giúp này
+
+Để biết thêm thông tin, truy cập: https://github.com/KhanhRomVN/dev_tool
+"""
     }
 }
 
@@ -452,54 +518,63 @@ def generate_commit_message(diff_text, config):
         sys.exit(1)
 
 def main():
-    parser = argparse.ArgumentParser(description='Auto-generate commit messages and push changes')
-    parser.add_argument('--no-push', action='store_true', help='Generate commit message without pushing')
+    parser = argparse.ArgumentParser(description='Developer Tool - Auto-commit and code management')
+    parser.add_argument('command', nargs='?', default='auto-commit', help='Command to execute (auto-commit, config, help)')
+    parser.add_argument('--no-push', action='store_true', help='Skip automatic push after commit')
     parser.add_argument('--reconfigure', action='store_true', help='Force reconfiguration')
     parser.add_argument('--no-review', action='store_true', help='Skip code review')
     args = parser.parse_args()
 
-    # Force reconfiguration if requested
-    if args.reconfigure:
-        config = configure_tool(load_config())
-        return
-
     config = load_config()
 
-    diff = get_git_diff()
-    
-    if not diff:
-        print_error(get_message('no_changes', config))
-        sys.exit(1)
-    
-    # Perform code review unless explicitly skipped or disabled in config
-    if not args.no_review and config['auto_review']:
-        print_section(get_message('performing_review', config))
-        review_results = review_code(diff, config)
-        if review_results:
-            print(review_results)
-            
-            # Ask if user wants to proceed
-            while True:
-                proceed = input(f"\n{get_message('proceed_commit', config)} ").lower()
-                if proceed in ['y', 'yes']:
-                    break
-                elif proceed in ['n', 'no', '']:
-                    print_error(get_message('commit_cancelled', config))
-                    sys.exit(0)
-    
-    commit_message = generate_commit_message(diff, config)
-    print_section(get_message('generated_msg', config))
-    print(f"\n{commit_message}\n")
-    
-    try:
-        subprocess.run(['git', 'commit', '-m', commit_message], check=True)
-        print_section(get_message('commit_success', config), 'GREEN')
+    # Handle different commands
+    if args.command == 'help':
+        print_header("DTL (Developer Tool)")
+        print(get_message('help_text', config))
+        return
+    elif args.command == 'config' or args.reconfigure:
+        config = configure_tool(config)
+        return
+    elif args.command == 'auto-commit':
+        diff = get_git_diff()
         
-        if not args.no_push and config['auto_push']:
-            subprocess.run(['git', 'push'], check=True)
-            print_section(get_message('push_success', config), 'GREEN')
-    except subprocess.CalledProcessError as e:
-        print_error(f"{get_message('git_error', config)} {e}")
+        if not diff:
+            print_error(get_message('no_changes', config))
+            sys.exit(1)
+        
+        # Perform code review unless explicitly skipped or disabled in config
+        if not args.no_review and config['auto_review']:
+            print_section(get_message('performing_review', config))
+            review_results = review_code(diff, config)
+            if review_results:
+                print(review_results)
+                
+                # Ask if user wants to proceed
+                while True:
+                    proceed = input(f"\n{get_message('proceed_commit', config)} ").lower()
+                    if proceed in ['y', 'yes']:
+                        break
+                    elif proceed in ['n', 'no', '']:
+                        print_error(get_message('commit_cancelled', config))
+                        sys.exit(0)
+        
+        commit_message = generate_commit_message(diff, config)
+        print_section(get_message('generated_msg', config))
+        print(f"\n{commit_message}\n")
+        
+        try:
+            subprocess.run(['git', 'commit', '-m', commit_message], check=True)
+            print_section(get_message('commit_success', config), 'GREEN')
+            
+            if not args.no_push and config['auto_push']:
+                subprocess.run(['git', 'push'], check=True)
+                print_section(get_message('push_success', config), 'GREEN')
+        except subprocess.CalledProcessError as e:
+            print_error(f"{get_message('git_error', config)} {e}")
+            sys.exit(1)
+    else:
+        print_error(f"Unknown command: {args.command}")
+        print(get_message('help_text', config))
         sys.exit(1)
 
 if __name__ == "__main__":

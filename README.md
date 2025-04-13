@@ -62,7 +62,7 @@ You can manage all settings through the configuration menu:
 
 ```bash
 # Open configuration menu
-auto-commit --reconfigure
+dtl --reconfigure
 ```
 
 Available settings:
@@ -82,16 +82,16 @@ Default behaviors:
 Basic usage:
 ```bash
 # Full process with default settings
-auto-commit
+dtl auto-commit
 
 # Override auto-push setting
-auto-commit --no-push
+dtl --no-push
 
 # Override auto-review setting
-auto-commit --no-review
+dtl --no-review
 
 # Configure all settings
-auto-commit --reconfigure
+dtl --reconfigure
 ```
 
 ## Code Review Features

@@ -6,7 +6,7 @@ import subprocess
 import argparse
 from typing import Dict
 
-CONFIG_DIR = os.path.expanduser("~/.config/auto-commit")
+CONFIG_DIR = os.path.expanduser("~/.config/dtl")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.json")
 
 # ANSI color codes
@@ -34,10 +34,20 @@ COMMIT_TYPES = {
     'revert': '⏪',   # Revert changes
 }
 
+# Default configuration
+DEFAULT_CONFIG = {
+    "api_key": "",
+    "model": "gemini-2.0-flash",
+    "ui_language": "en",
+    "commit_language": "en",
+    "auto_push": False,
+    "auto_review": True
+}
+
 # Translations for UI messages
 MESSAGES = {
     'en': {
-        'welcome': "Auto-Commit Tool Configuration",
+        'welcome': "DTL (Developer Tool) Configuration",
         'enter_api_key': "Please enter your Gemini API key:",
         'choose_model': "Choose your preferred model:",
         'model_1': "Gemini 2.0 Flash (recommended) - Advanced features, speed",
@@ -46,6 +56,8 @@ MESSAGES = {
         'lang_1': "English",
         'lang_2': "Tiếng Việt",
         'choose_commit_lang': "Choose commit message language:",
+        'choose_auto_push': "Enable automatic push after commit? (y/N):",
+        'choose_auto_review': "Enable automatic code review? (Y/n):",
         'invalid_choice': "Invalid choice. Please enter 1 or 2.",
         'config_saved': "Configuration saved successfully!",
         'performing_review': "Performing code review...",
@@ -57,9 +69,62 @@ MESSAGES = {
         'git_error': "Error during git operations:",
         'review_error': "Error performing code review:",
         'generated_msg': "Generated commit message:",
+        'config_menu': """
+Configuration Menu:
+1) Change interface language
+2) Change commit message language
+3) Update Gemini API key
+4) Change AI model
+5) Configure auto-push
+6) Configure auto-review
+7) Save and exit
+""",
+        'current_config': "Current configuration:",
+        'ui_lang': "Interface language",
+        'commit_lang': "Commit language",
+        'auto_push': "Auto-push",
+        'auto_review': "Auto-review",
+        'enabled': "Enabled",
+        'disabled': "Disabled",
+        'select_option': "Select an option (1-7):",
+        'invalid_option': "Invalid option. Please try again.",
+        'save_exit': "Configuration saved. Exiting...",
+        'help_text': """
+🛠️  DTL (Developer Tool) Help
+============================
+
+Available Commands:
+-----------------
+dtl help                     Show this help message
+dtl config                   Configure tool settings
+dtl auto-commit             Generate commit message and handle git operations
+
+Auto-commit Options:
+------------------
+--no-push                   Skip automatic push after commit
+--no-review                 Skip code review before commit
+
+Configuration Options:
+-------------------
+- Interface language (English/Vietnamese)
+- Commit message language
+- AI model selection
+- Auto-push settings
+- Auto-review settings
+- Gemini API key
+
+Examples:
+--------
+dtl auto-commit             Normal commit with review and push
+dtl auto-commit --no-push   Commit without pushing
+dtl config                  Open configuration menu
+dtl help                    Show this help message
+
+For more information, visit: https://github.com/KhanhRomVN/dev_tool
+"""
     },
     'vi': {
-        'welcome': "Cấu Hình Công Cụ Auto-Commit",
+        'welcome': "Cấu Hình DTL (Developer Tool)",
         'enter_api_key': "Vui lòng nhập Gemini API key của bạn:",
         'choose_model': "Chọn model bạn muốn sử dụng:",
         'model_1': "Gemini 2.0 Flash (khuyến nghị) - Tính năng nâng cao, tốc độ nhanh",
@@ -68,6 +133,8 @@ MESSAGES = {
         'lang_1': "Tiếng Anh",
         'lang_2': "Tiếng Việt",
         'choose_commit_lang': "Chọn ngôn ngữ cho commit message:",
+        'choose_auto_push': "Bật tự động push sau khi commit? (y/N):",
+        'choose_auto_review': "Bật tự động review code? (Y/n):",
         'invalid_choice': "Lựa chọn không hợp lệ. Vui lòng nhập 1 hoặc 2.",
         'config_saved': "Đã lưu cấu hình thành công!",
         'performing_review': "Đang thực hiện code review...",
@@ -79,6 +146,59 @@ MESSAGES = {
         'git_error': "Lỗi trong quá trình thực hiện git:",
         'review_error': "Lỗi khi thực hiện code review:",
         'generated_msg': "Commit message đã tạo:",
+        'config_menu': """
+Menu Cấu Hình:
+1) Thay đổi ngôn ngữ giao diện
+2) Thay đổi ngôn ngữ commit message
+3) Cập nhật Gemini API key
+4) Thay đổi model AI
+5) Cấu hình tự động push
+6) Cấu hình tự động review
+7) Lưu và thoát
+""",
+        'current_config': "Cấu hình hiện tại:",
+        'ui_lang': "Ngôn ngữ giao diện",
+        'commit_lang': "Ngôn ngữ commit",
+        'auto_push': "Tự động push",
+        'auto_review': "Tự động review",
+        'enabled': "Bật",
+        'disabled': "Tắt",
+        'select_option': "Chọn một tùy chọn (1-7):",
+        'invalid_option': "Tùy chọn không hợp lệ. Vui lòng thử lại.",
+        'save_exit': "Đã lưu cấu hình. Đang thoát...",
+        'help_text': """
+🛠️  DTL (Developer Tool) - Trợ Giúp
+==================================
+
+Các Lệnh Có Sẵn:
+---------------
+dtl help                     Hiển thị trợ giúp này
+dtl config                   Cấu hình thiết lập
+dtl auto-commit             Tạo commit message và xử lý git
+
+Tùy Chọn Auto-commit:
+-------------------
+--no-push                   Bỏ qua tự động push sau khi commit
+--no-review                 Bỏ qua review code trước khi commit
+
+Tùy Chọn Cấu Hình:
+----------------
+- Ngôn ngữ giao diện (Tiếng Anh/Tiếng Việt)
+- Ngôn ngữ commit message
+- Lựa chọn model AI
+- Cài đặt tự động push
+- Cài đặt tự động review
+- Gemini API key
+
+Ví Dụ Sử Dụng:
+------------
+dtl auto-commit             Commit bình thường với review và push
+dtl auto-commit --no-push   Commit không push
+dtl config                  Mở menu cấu hình
+dtl help                    Hiển thị trợ giúp này
+
+Để biết thêm thông tin, truy cập: https://github.com/KhanhRomVN/dev_tool
+"""
     }
 }
 
@@ -99,10 +219,81 @@ def get_message(key: str, config: Dict) -> str:
     """Get a translated message based on UI language."""
     return MESSAGES[config['ui_language']][key]
 
+def show_current_config(config: Dict) -> None:
+    """Display current configuration settings."""
+    print_section(get_message('current_config', config))
+    print(f"{COLORS['YELLOW']}{get_message('ui_lang', config)}:{COLORS['END']} " + 
+          ("English" if config['ui_language'] == 'en' else "Tiếng Việt"))
+    print(f"{COLORS['YELLOW']}{get_message('commit_lang', config)}:{COLORS['END']} " + 
+          ("English" if config['commit_language'] == 'en' else "Tiếng Việt"))
+    print(f"{COLORS['YELLOW']}{get_message('auto_push', config)}:{COLORS['END']} " + 
+          (get_message('enabled', config) if config['auto_push'] else get_message('disabled', config)))
+    print(f"{COLORS['YELLOW']}{get_message('auto_review', config)}:{COLORS['END']} " + 
+          (get_message('enabled', config) if config['auto_review'] else get_message('disabled', config)))
+
+def configure_tool(config: Dict) -> Dict:
+    """Interactive configuration menu."""
+    while True:
+        print_header(get_message('welcome', config))
+        show_current_config(config)
+        print(get_message('config_menu', config))
+        
+        choice = input(get_message('select_option', config))
+        
+        if choice == '1':
+            print_section(get_message('choose_ui_lang', config))
+            print(f"1) {get_message('lang_1', config)}")
+            print(f"2) {get_message('lang_2', config)}")
+            lang_choice = input("\nEnter choice (1/2): ")
+            if lang_choice in ['1', '2']:
+                config['ui_language'] = 'en' if lang_choice == '1' else 'vi'
+        
+        elif choice == '2':
+            print_section(get_message('choose_commit_lang', config))
+            print(f"1) {get_message('lang_1', config)}")
+            print(f"2) {get_message('lang_2', config)}")
+            lang_choice = input("\nEnter choice (1/2): ")
+            if lang_choice in ['1', '2']:
+                config['commit_language'] = 'en' if lang_choice == '1' else 'vi'
+        
+        elif choice == '3':
+            api_key = input(f"\n{get_message('enter_api_key', config)}: ")
+            if api_key.strip():
+                config['api_key'] = api_key
+        
+        elif choice == '4':
+            print_section(get_message('choose_model', config))
+            print(f"1) {get_message('model_1', config)}")
+            print(f"2) {get_message('model_2', config)}")
+            model_choice = input("\nEnter choice (1/2): ")
+            if model_choice in ['1', '2']:
+                config['model'] = "gemini-2.0-flash" if model_choice == '1' else "gemini-2.0-flash-lite"
+        
+        elif choice == '5':
+            auto_push = input(f"\n{get_message('choose_auto_push', config)} ").lower()
+            config['auto_push'] = auto_push in ['y', 'yes']
+        
+        elif choice == '6':
+            auto_review = input(f"\n{get_message('choose_auto_review', config)} ").lower()
+            config['auto_review'] = auto_review not in ['n', 'no']
+        
+        elif choice == '7':
+            with open(CONFIG_PATH, 'w') as f:
+                json.dump(config, f, indent=4)
+            print_section(get_message('save_exit', config), 'GREEN')
+            break
+        
+        else:
+            print_error(get_message('invalid_option', config))
+    
+    return config
+
 def create_config():
-    """Create configuration by prompting user."""
+    """Create initial configuration."""
     if not os.path.exists(CONFIG_DIR):
         os.makedirs(CONFIG_DIR)
+    
+    config = DEFAULT_CONFIG.copy()
     
     print_header(MESSAGES['en']['welcome'])
     
@@ -117,45 +308,47 @@ def create_config():
             break
         print_error(MESSAGES['en']['invalid_choice'])
     
-    ui_language = "en" if ui_lang_choice == "1" else "vi"
+    config['ui_language'] = "en" if ui_lang_choice == "1" else "vi"
     
     # Now use the selected language for remaining prompts
-    api_key = input(f"\n{get_message('enter_api_key', {'ui_language': ui_language})}: ")
+    api_key = input(f"\n{get_message('enter_api_key', config)}: ")
+    config['api_key'] = api_key
     
-    print_section(get_message('choose_model', {'ui_language': ui_language}))
-    print(f"1) {get_message('model_1', {'ui_language': ui_language})}")
-    print(f"2) {get_message('model_2', {'ui_language': ui_language})}")
+    print_section(get_message('choose_model', config))
+    print(f"1) {get_message('model_1', config)}")
+    print(f"2) {get_message('model_2', config)}")
     
     while True:
         model_choice = input("\nEnter choice (1/2): ")
         if model_choice in ['1', '2']:
             break
-        print_error(get_message('invalid_choice', {'ui_language': ui_language}))
+        print_error(get_message('invalid_choice', config))
     
-    print_section(get_message('choose_commit_lang', {'ui_language': ui_language}))
-    print(f"1) {get_message('lang_1', {'ui_language': ui_language})}")
-    print(f"2) {get_message('lang_2', {'ui_language': ui_language})}")
+    config['model'] = "gemini-2.0-flash" if model_choice == "1" else "gemini-2.0-flash-lite"
+    
+    print_section(get_message('choose_commit_lang', config))
+    print(f"1) {get_message('lang_1', config)}")
+    print(f"2) {get_message('lang_2', config)}")
     
     while True:
         commit_lang_choice = input("\nEnter choice (1/2): ")
         if commit_lang_choice in ['1', '2']:
             break
-        print_error(get_message('invalid_choice', {'ui_language': ui_language}))
+        print_error(get_message('invalid_choice', config))
     
-    model = "gemini-2.0-flash" if model_choice == "1" else "gemini-2.0-flash-lite"
-    commit_language = "en" if commit_lang_choice == "1" else "vi"
+    config['commit_language'] = "en" if commit_lang_choice == "1" else "vi"
     
-    config = {
-        "api_key": api_key,
-        "model": model,
-        "ui_language": ui_language,
-        "commit_language": commit_language
-    }
+    # Configure auto-push and auto-review
+    auto_push = input(f"\n{get_message('choose_auto_push', config)} ").lower()
+    config['auto_push'] = auto_push in ['y', 'yes']
+    
+    auto_review = input(f"\n{get_message('choose_auto_review', config)} ").lower()
+    config['auto_review'] = auto_review not in ['n', 'no']
     
     with open(CONFIG_PATH, 'w') as f:
         json.dump(config, f, indent=4)
     
-    print_section(get_message('config_saved', {'ui_language': ui_language}), 'GREEN')
+    print_section(get_message('config_saved', config), 'GREEN')
     return config
 
 def load_config():
@@ -167,10 +360,10 @@ def load_config():
         with open(CONFIG_PATH) as f:
             config = json.load(f)
             
-        # Validate config
-        required_keys = ['api_key', 'model', 'ui_language', 'commit_language']
-        if not all(key in config for key in required_keys):
-            return create_config()
+        # Validate config and set defaults for new fields
+        for key, value in DEFAULT_CONFIG.items():
+            if key not in config:
+                config[key] = value
             
         return config
     except Exception as e:
@@ -325,53 +518,63 @@ def generate_commit_message(diff_text, config):
         sys.exit(1)
 
 def main():
-    parser = argparse.ArgumentParser(description='Auto-generate commit messages and push changes')
-    parser.add_argument('--no-push', action='store_true', help='Generate commit message without pushing')
+    parser = argparse.ArgumentParser(description='Developer Tool - Auto-commit and code management')
+    parser.add_argument('command', nargs='?', default='auto-commit', help='Command to execute (auto-commit, config, help)')
+    parser.add_argument('--no-push', action='store_true', help='Skip automatic push after commit')
     parser.add_argument('--reconfigure', action='store_true', help='Force reconfiguration')
     parser.add_argument('--no-review', action='store_true', help='Skip code review')
     args = parser.parse_args()
 
-    # Force reconfiguration if requested
-    if args.reconfigure:
-        config = create_config()
-    else:
-        config = load_config()
+    config = load_config()
 
-    diff = get_git_diff()
-    
-    if not diff:
-        print_error(get_message('no_changes', config))
-        sys.exit(1)
-    
-    # Perform code review unless explicitly skipped
-    if not args.no_review:
-        print_section(get_message('performing_review', config))
-        review_results = review_code(diff, config)
-        if review_results:
-            print(review_results)
-            
-            # Ask if user wants to proceed
-            while True:
-                proceed = input(f"\n{get_message('proceed_commit', config)} ").lower()
-                if proceed in ['y', 'yes']:
-                    break
-                elif proceed in ['n', 'no', '']:
-                    print_error(get_message('commit_cancelled', config))
-                    sys.exit(0)
-    
-    commit_message = generate_commit_message(diff, config)
-    print_section(get_message('generated_msg', config))
-    print(f"\n{commit_message}\n")
-    
-    try:
-        subprocess.run(['git', 'commit', '-m', commit_message], check=True)
-        print_section(get_message('commit_success', config), 'GREEN')
+    # Handle different commands
+    if args.command == 'help':
+        print_header("DTL (Developer Tool)")
+        print(get_message('help_text', config))
+        return
+    elif args.command == 'config' or args.reconfigure:
+        config = configure_tool(config)
+        return
+    elif args.command == 'auto-commit':
+        diff = get_git_diff()
         
-        if not args.no_push:
-            subprocess.run(['git', 'push'], check=True)
-            print_section(get_message('push_success', config), 'GREEN')
-    except subprocess.CalledProcessError as e:
-        print_error(f"{get_message('git_error', config)} {e}")
+        if not diff:
+            print_error(get_message('no_changes', config))
+            sys.exit(1)
+        
+        # Perform code review unless explicitly skipped or disabled in config
+        if not args.no_review and config['auto_review']:
+            print_section(get_message('performing_review', config))
+            review_results = review_code(diff, config)
+            if review_results:
+                print(review_results)
+                
+                # Ask if user wants to proceed
+                while True:
+                    proceed = input(f"\n{get_message('proceed_commit', config)} ").lower()
+                    if proceed in ['y', 'yes']:
+                        break
+                    elif proceed in ['n', 'no', '']:
+                        print_error(get_message('commit_cancelled', config))
+                        sys.exit(0)
+        
+        commit_message = generate_commit_message(diff, config)
+        print_section(get_message('generated_msg', config))
+        print(f"\n{commit_message}\n")
+        
+        try:
+            subprocess.run(['git', 'commit', '-m', commit_message], check=True)
+            print_section(get_message('commit_success', config), 'GREEN')
+            
+            if not args.no_push and config['auto_push']:
+                subprocess.run(['git', 'push'], check=True)
+                print_section(get_message('push_success', config), 'GREEN')
+        except subprocess.CalledProcessError as e:
+            print_error(f"{get_message('git_error', config)} {e}")
+            sys.exit(1)
+    else:
+        print_error(f"Unknown command: {args.command}")
+        print(get_message('help_text', config))
         sys.exit(1)
 
 if __name__ == "__main__":

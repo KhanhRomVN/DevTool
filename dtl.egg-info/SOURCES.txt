@@ -1,0 +1,10 @@
+README.md
+setup.py
+auto_commit/__init__.py
+auto_commit/cli.py
+dtl.egg-info/PKG-INFO
+dtl.egg-info/SOURCES.txt
+dtl.egg-info/dependency_links.txt
+dtl.egg-info/entry_points.txt
+dtl.egg-info/requires.txt
+dtl.egg-info/top_level.txt
