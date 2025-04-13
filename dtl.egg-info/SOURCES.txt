@@ -2,6 +2,7 @@ README.md
 setup.py
 auto_commit/__init__.py
 auto_commit/cli.py
+auto_commit/flutter.py
 dtl.egg-info/PKG-INFO
 dtl.egg-info/SOURCES.txt
 dtl.egg-info/dependency_links.txt

@@ -98,6 +98,7 @@ Available Commands:
 dtl help                     Show this help message
 dtl config                   Configure tool settings
 dtl auto-commit             Generate commit message and handle git operations
+dtl flutter                 Flutter development tools and utilities
 
 Auto-commit Options:
 ------------------
@@ -175,6 +176,7 @@ Các Lệnh Có Sẵn:
 dtl help                     Hiển thị trợ giúp này
 dtl config                   Cấu hình thiết lập
 dtl auto-commit             Tạo commit message và xử lý git
+dtl flutter                 Công cụ và tiện ích phát triển Flutter
 
 Tùy Chọn Auto-commit:
 -------------------
@@ -572,6 +574,10 @@ def main():
         except subprocess.CalledProcessError as e:
             print_error(f"{get_message('git_error', config)} {e}")
             sys.exit(1)
+    elif args.command == 'flutter':
+        from . import flutter
+        flutter.show_flutter_menu(config)
+        return
     else:
         print_error(f"Unknown command: {args.command}")
         print(get_message('help_text', config))
