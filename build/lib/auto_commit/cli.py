@@ -129,12 +129,6 @@ def get_prompt_by_language(language, diff_text):
         - Chi tiết thay đổi 1 (văn bản thuần, không định dạng)
         - Chi tiết thay đổi 2 (văn bản thuần, không định dạng)
         
-        Ví dụ:
-        feat: Thêm xác thực người dùng
-        - Triển khai API đăng nhập và đăng ký
-        - Thêm xác thực token JWT
-        - Tạo middleware xác thực người dùng
-        
         Git diff:
         {diff_text}
         """
@@ -154,15 +148,84 @@ def get_prompt_by_language(language, diff_text):
         - Change detail 1 (plain text, no formatting)
         - Change detail 2 (plain text, no formatting)
         
-        Example:
-        feat: Add user authentication
-        - Implement login and registration endpoints
-        - Add JWT token validation
-        - Create user authentication middleware
-        
         Git diff:
         {diff_text}
         """
+
+def review_code(diff_text, config):
+    """Perform code review using Gemini AI."""
+    genai.configure(api_key=config['api_key'])
+    model = genai.GenerativeModel(config['model'])
+    
+    review_prompt = f"""
+    Perform a thorough code review of the following changes.
+    Focus on:
+    1. Potential bugs or issues
+    2. Code improvement suggestions
+    3. Code smells or anti-patterns
+    4. Security concerns
+    
+    Format your response in clear sections.
+    Be specific but concise.
+    If no issues are found in a category, say "No issues found."
+    Do not use markdown formatting.
+    Keep bullet points simple with just "-" prefix.
+    
+    Changes to review:
+    {diff_text}
+    """
+    
+    try:
+        response = model.generate_content(review_prompt)
+        review = response.text.strip()
+        
+        # Format the review with emojis and sections
+        sections = {
+            "🐛 Potential Bugs": [],
+            "💡 Improvements": [],
+            "🔍 Code Smells": [],
+            "🔒 Security": []
+        }
+        
+        current_section = None
+        for line in review.split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Try to match section headers
+            lower_line = line.lower()
+            if "bug" in lower_line or "issue" in lower_line:
+                current_section = "🐛 Potential Bugs"
+            elif "improve" in lower_line or "suggest" in lower_line:
+                current_section = "💡 Improvements"
+            elif "smell" in lower_line or "pattern" in lower_line:
+                current_section = "🔍 Code Smells"
+            elif "security" in lower_line or "vulnerab" in lower_line:
+                current_section = "🔒 Security"
+            elif current_section and line.startswith(("-", "*", "•")):
+                # Clean up the line
+                clean_line = line.lstrip("-*• ").strip()
+                clean_line = clean_line.replace("**", "").replace("*", "").replace("`", "")
+                sections[current_section].append(clean_line)
+        
+        # Format the final review
+        formatted_review = "\n📋 Code Review Results\n"
+        formatted_review += "=" * 50 + "\n\n"
+        
+        for section, items in sections.items():
+            formatted_review += f"{section}:\n"
+            if items:
+                for item in items:
+                    formatted_review += f"- {item}\n"
+            else:
+                formatted_review += "✅ No issues found\n"
+            formatted_review += "\n"
+        
+        return formatted_review
+    except Exception as e:
+        print(f"Error performing code review: {e}")
+        return None
 
 def generate_commit_message(diff_text, config):
     """Generate commit message using Gemini AI."""
@@ -190,6 +253,7 @@ def main():
     parser = argparse.ArgumentParser(description='Auto-generate commit messages and push changes')
     parser.add_argument('--no-push', action='store_true', help='Generate commit message without pushing')
     parser.add_argument('--reconfigure', action='store_true', help='Force reconfiguration')
+    parser.add_argument('--no-review', action='store_true', help='Skip code review')
     args = parser.parse_args()
 
     # Force reconfiguration if requested
@@ -203,6 +267,22 @@ def main():
     if not diff:
         print("No staged changes found. Use 'git add' to stage your changes.")
         sys.exit(1)
+    
+    # Perform code review unless explicitly skipped
+    if not args.no_review:
+        print("\nPerforming code review...")
+        review_results = review_code(diff, config)
+        if review_results:
+            print(review_results)
+            
+            # Ask if user wants to proceed
+            while True:
+                proceed = input("\nDo you want to proceed with the commit? (y/N): ").lower()
+                if proceed in ['y', 'yes']:
+                    break
+                elif proceed in ['n', 'no', '']:
+                    print("Commit cancelled. Please review and fix the issues.")
+                    sys.exit(0)
     
     commit_message = generate_commit_message(diff, config)
     print(f"\nGenerated commit message:\n{commit_message}\n")

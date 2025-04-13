@@ -25,8 +25,6 @@ The tool automatically performs code review before committing, analyzing:
 - Git
 - A Gemini API key (get it from [Google AI Studio](https://makersuite.google.com/app/apikey))
 
-The installation script will automatically install other required dependencies (pipx).
-
 ## Installation
 
 1. Clone or download this repository
@@ -40,8 +38,38 @@ chmod +x install.sh
 
 During installation, you'll be prompted to:
 - Enter your Gemini API key
-- Choose your preferred model (Flash or Flash-Lite)
+- Choose your preferred model
 - Select language (English/Tiếng Việt)
+
+## How It Works
+
+1. Code Review:
+   - Analyzes staged changes for potential issues
+   - Provides detailed feedback in multiple categories
+   - Asks for confirmation before proceeding
+
+2. Commit Message Generation:
+   - Uses Gemini AI to understand changes
+   - Formats message with appropriate emoji
+   - Follows conventional commit format
+
+3. Git Operations:
+   - Commits changes with generated message
+   - Optionally pushes to remote repository
+
+## Available Models
+
+1. **Gemini 2.0 Flash**
+   - Advanced features and capabilities
+   - Faster response times
+   - Better for complex code analysis
+   - Higher API usage cost
+
+2. **Gemini 2.0 Flash-Lite**
+   - Basic analysis capabilities
+   - Lower latency
+   - More cost-effective
+   - Suitable for simple changes
 
 ## Usage
 
@@ -63,26 +91,23 @@ auto-commit --no-push
 auto-commit --reconfigure
 ```
 
-## Code Review Process
-
-When you run `auto-commit`, the tool will:
-1. Analyze your staged changes
-2. Provide a detailed code review with:
-   - Potential bugs detection
-   - Code improvement suggestions
-   - Code smell identification
-   - Security concern checks
-3. Ask if you want to proceed with the commit
-4. Generate and apply the commit message if you proceed
-
-To skip the code review:
-```bash
-auto-commit --no-review
-```
-
 ## Commit Message Format
 
-Messages are formatted with emojis based on type:
+Messages are formatted with emojis based on type. Examples:
+
+```
+✨ feat: Add user authentication
+- Implement JWT token validation
+- Add login endpoints
+```
+
+```
+🐛 fix: Resolve memory leak in worker pool
+- Fix resource cleanup in worker threads
+- Add proper error handling
+```
+
+Available types:
 - ✨ feat: New features
 - 🐛 fix: Bug fixes
 - 📚 docs: Documentation
@@ -95,45 +120,39 @@ Messages are formatted with emojis based on type:
 - 📦 build: Build
 - ⏪ revert: Reverts
 
-## Configuration
-
-The tool stores its configuration in `~/.config/auto-commit/config.json`. This includes:
-- Your Gemini API key
-- Your chosen model preference
-- Language preference (English/Vietnamese)
-
 ## Language Support
 
 The tool supports:
 - English: Professional commit messages and code reviews
 - Tiếng Việt: Commit messages in Vietnamese
 
+## Configuration
+
+Settings are stored in `~/.config/auto-commit/config.json`:
+- Gemini API key
+- Model preference
+- Language selection
+
 ## Uninstallation
 
-To remove the tool from your system:
-
+To remove the tool:
 ```bash
-chmod +x uninstall.sh
 ./uninstall.sh
 ```
 
-This will:
-- Remove the auto-commit command
-- Delete the virtual environment
-- Remove all tool files and configurations
-
 ## Security Note
 
-Your API key is stored locally in the configuration file. Make sure to keep it secure and never share it with others.
+Your API key is stored locally in the configuration file. Keep it secure and never share it.
 
 ## Troubleshooting
 
-If you encounter any issues:
-1. Make sure you've opened a new terminal or sourced ~/.bashrc after installation
-2. Check if ~/.local/bin is in your PATH
-3. Verify that your Gemini API key is valid
-4. Ensure you're in a git repository when using the command
+If you encounter issues:
+1. Check terminal PATH after installation
+2. Verify Gemini API key
+3. Ensure git repository is initialized
+4. Check virtual environment activation
 
 ## License
 
 MIT License - Feel free to modify and distribute this tool as needed.
+test
