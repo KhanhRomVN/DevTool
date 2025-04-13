@@ -10,6 +10,7 @@ A command-line tool that automatically generates meaningful commit messages usin
   * Commit messages
 - AI-powered code review
 - Automatic commit message generation
+- Configurable default behaviors
 - Proper emoji formatting for commit types
 - Runs in isolated virtual environment
 
@@ -21,7 +22,7 @@ The tool supports two separate language settings:
    - English: All prompts and messages in English
    - Tiếng Việt: All prompts and messages in Vietnamese
    - Selected during installation
-   - Can be changed with --reconfigure
+   - Can be changed with `auto-commit --reconfigure`
 
 2. **Commit Message Language**
    - English: Professional commit messages
@@ -46,11 +47,52 @@ chmod +x install.sh
 ./install.sh
 ```
 
-During installation, you'll be prompted to:
-1. Choose interface language (English/Tiếng Việt)
-2. Enter your Gemini API key
-3. Choose your preferred model
-4. Select commit message language
+During installation, you'll be prompted to configure:
+1. Interface language (English/Tiếng Việt)
+2. Commit message language
+3. Gemini API key
+4. AI model choice
+5. Default behaviors:
+   - Auto-push after commit
+   - Auto-review before commit
+
+## Configuration
+
+You can manage all settings through the configuration menu:
+
+```bash
+# Open configuration menu
+auto-commit --reconfigure
+```
+
+Available settings:
+1. Interface language
+2. Commit message language
+3. Gemini API key
+4. AI model
+5. Auto-push (enabled/disabled)
+6. Auto-review (enabled/disabled)
+
+Default behaviors:
+- Auto-push: Disabled by default
+- Auto-review: Enabled by default
+
+## Usage
+
+Basic usage:
+```bash
+# Full process with default settings
+auto-commit
+
+# Override auto-push setting
+auto-commit --no-push
+
+# Override auto-review setting
+auto-commit --no-review
+
+# Configure all settings
+auto-commit --reconfigure
+```
 
 ## Code Review Features
 
@@ -59,23 +101,6 @@ The tool performs automatic code review with beautiful formatting:
 - 💡 Code improvement suggestions
 - 🔍 Code smells and anti-patterns
 - 🔒 Security concerns
-
-## Usage
-
-Basic usage:
-```bash
-# Full process (code review + commit + push)
-auto-commit
-
-# Skip code review
-auto-commit --no-review
-
-# Generate commit message without pushing
-auto-commit --no-push
-
-# Change settings (languages, API key, model)
-auto-commit --reconfigure
-```
 
 ## Commit Message Format
 
@@ -106,13 +131,15 @@ Available types:
 - 📦 build: Build
 - ⏪ revert: Reverts
 
-## Configuration
+## Configuration Storage
 
 Settings are stored in `~/.config/auto-commit/config.json`:
 - Gemini API key
 - Model preference
 - Interface language
 - Commit message language
+- Auto-push preference
+- Auto-review preference
 
 ## Uninstallation
 
@@ -133,7 +160,12 @@ If you encounter issues:
 3. Ensure git repository is initialized
 4. Check virtual environment activation
 
+To reset all settings:
+```bash
+rm -rf ~/.config/auto-commit
+auto-commit --reconfigure
+```
+
 ## License
 
 MIT License - Feel free to modify and distribute this tool as needed.
-ssss
