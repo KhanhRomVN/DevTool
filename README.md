@@ -4,20 +4,30 @@ A command-line tool that automatically generates meaningful commit messages usin
 
 ## Features
 
-- Automatically generates commit messages based on staged changes
-- Performs AI-powered code review before committing
-- Uses Google's Gemini 2.0 AI models
-- Supports both English and Vietnamese
+- Beautiful terminal interface with colors and formatting
+- Dual language support (English/Tiếng Việt) for:
+  * Terminal interface
+  * Commit messages
+- AI-powered code review
+- Automatic commit message generation
 - Proper emoji formatting for commit types
 - Runs in isolated virtual environment
 
-## Code Review Features
+## Interface Languages
 
-The tool automatically performs code review before committing, analyzing:
-- 🐛 Potential bugs and issues
-- 💡 Code improvement suggestions
-- 🔍 Code smells and anti-patterns
-- 🔒 Security concerns
+The tool supports two separate language settings:
+
+1. **Terminal Interface Language**
+   - English: All prompts and messages in English
+   - Tiếng Việt: All prompts and messages in Vietnamese
+   - Selected during installation
+   - Can be changed with --reconfigure
+
+2. **Commit Message Language**
+   - English: Professional commit messages
+   - Tiếng Việt: Commit messages in Vietnamese
+   - Independent from interface language
+   - Can be different from interface language
 
 ## Prerequisites
 
@@ -37,47 +47,23 @@ chmod +x install.sh
 ```
 
 During installation, you'll be prompted to:
-- Enter your Gemini API key
-- Choose your preferred model
-- Select language (English/Tiếng Việt)
+1. Choose interface language (English/Tiếng Việt)
+2. Enter your Gemini API key
+3. Choose your preferred model
+4. Select commit message language
 
-## How It Works
+## Code Review Features
 
-1. Code Review:
-   - Analyzes staged changes for potential issues
-   - Provides detailed feedback in multiple categories
-   - Asks for confirmation before proceeding
-
-2. Commit Message Generation:
-   - Uses Gemini AI to understand changes
-   - Formats message with appropriate emoji
-   - Follows conventional commit format
-
-3. Git Operations:
-   - Commits changes with generated message
-   - Optionally pushes to remote repository
-
-## Available Models
-
-1. **Gemini 2.0 Flash**
-   - Advanced features and capabilities
-   - Faster response times
-   - Better for complex code analysis
-   - Higher API usage cost
-
-2. **Gemini 2.0 Flash-Lite**
-   - Basic analysis capabilities
-   - Lower latency
-   - More cost-effective
-   - Suitable for simple changes
+The tool performs automatic code review with beautiful formatting:
+- 🐛 Potential bugs and issues
+- 💡 Code improvement suggestions
+- 🔍 Code smells and anti-patterns
+- 🔒 Security concerns
 
 ## Usage
 
 Basic usage:
 ```bash
-# Stage your changes
-git add .
-
 # Full process (code review + commit + push)
 auto-commit
 
@@ -87,7 +73,7 @@ auto-commit --no-review
 # Generate commit message without pushing
 auto-commit --no-push
 
-# Change settings (API key, model, language)
+# Change settings (languages, API key, model)
 auto-commit --reconfigure
 ```
 
@@ -120,18 +106,13 @@ Available types:
 - 📦 build: Build
 - ⏪ revert: Reverts
 
-## Language Support
-
-The tool supports:
-- English: Professional commit messages and code reviews
-- Tiếng Việt: Commit messages in Vietnamese
-
 ## Configuration
 
 Settings are stored in `~/.config/auto-commit/config.json`:
 - Gemini API key
 - Model preference
-- Language selection
+- Interface language
+- Commit message language
 
 ## Uninstallation
 
@@ -155,4 +136,3 @@ If you encounter issues:
 ## License
 
 MIT License - Feel free to modify and distribute this tool as needed.
-test
