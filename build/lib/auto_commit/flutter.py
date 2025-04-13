@@ -14,9 +14,10 @@ MESSAGES = {
             "Uninstall App",
             "Clean Project",
             "Get Dependencies",
-            "Run Flutter Doctor"
+            "Run Flutter Doctor",
+            "Setup Development Environment"
         ],
-        'enter_choice': "Enter your choice (0-6): ",
+        'enter_choice': "Enter your choice (0-7): ",
         'error_cmd': "Error executing command: ",
         'building': "Building App Bundle...",
         'executing': "Executing: ",
@@ -44,7 +45,34 @@ MESSAGES = {
         'no_devices': "No Android devices found. Please connect a device via USB.",
         'select_device': "Select a device to uninstall from:",
         'enter_device_choice': "Enter device number (or press Enter to cancel): ",
-        'invalid_device_choice': "Invalid device selection. Please try again."
+        'invalid_device_choice': "Invalid device selection. Please try again.",
+        'setup_env_title': "Development Environment Setup",
+        'select_ide': "Select IDE to install:",
+        'ide_options': [
+            "Visual Studio Code",
+            "Android Studio",
+            "Both"
+        ],
+        'installing': "Installing ",
+        'setup_success': "Setup completed successfully!",
+        'setup_failed': "Setup failed: ",
+        'select_flutter_version': "Select Flutter version to install:",
+        'downloading': "Downloading ",
+        'extracting': "Extracting ",
+        'configuring': "Configuring environment...",
+        'installing_deps': "Installing dependencies...",
+        'setup_complete': "Environment setup complete!",
+        'already_installed': "Already installed: ",
+        'checking_installed': "Checking installed components...",
+        'setup_instructions': """
+Setup will include:
+1. Install required system packages
+2. Install selected IDE(s)
+3. Install Flutter SDK
+4. Configure environment variables
+5. Install Android SDK
+6. Verify installation
+"""
     },
     'vi': {
         'menu_title': "🛠️  Công Cụ Phát Triển Flutter",
@@ -54,9 +82,10 @@ MESSAGES = {
             "Gỡ cài đặt ứng dụng",
             "Dọn dẹp dự án",
             "Cập nhật Dependencies",
-            "Chạy Flutter Doctor"
+            "Chạy Flutter Doctor",
+            "Thiết lập Môi trường Phát triển"
         ],
-        'enter_choice': "Nhập lựa chọn của bạn (0-6): ",
+        'enter_choice': "Nhập lựa chọn của bạn (0-7): ",
         'error_cmd': "Lỗi thực thi lệnh: ",
         'building': "Đang tạo App Bundle...",
         'executing': "Đang thực thi: ",
@@ -84,7 +113,34 @@ MESSAGES = {
         'no_devices': "Không tìm thấy thiết bị Android nào. Vui lòng kết nối thiết bị qua USB.",
         'select_device': "Chọn thiết bị để gỡ cài đặt:",
         'enter_device_choice': "Nhập số thiết bị (hoặc nhấn Enter để hủy): ",
-        'invalid_device_choice': "Lựa chọn thiết bị không hợp lệ. Vui lòng thử lại."
+        'invalid_device_choice': "Lựa chọn thiết bị không hợp lệ. Vui lòng thử lại.",
+        'setup_env_title': "Thiết lập Môi trường Phát triển",
+        'select_ide': "Chọn IDE để cài đặt:",
+        'ide_options': [
+            "Visual Studio Code",
+            "Android Studio",
+            "Cả hai"
+        ],
+        'installing': "Đang cài đặt ",
+        'setup_success': "Thiết lập hoàn tất thành công!",
+        'setup_failed': "Thiết lập thất bại: ",
+        'select_flutter_version': "Chọn phiên bản Flutter để cài đặt:",
+        'downloading': "Đang tải xuống ",
+        'extracting': "Đang giải nén ",
+        'configuring': "Đang cấu hình môi trường...",
+        'installing_deps': "Đang cài đặt các gói phụ thuộc...",
+        'setup_complete': "Thiết lập môi trường hoàn tất!",
+        'already_installed': "Đã được cài đặt: ",
+        'checking_installed': "Đang kiểm tra các thành phần đã cài đặt...",
+        'setup_instructions': """
+Quá trình thiết lập bao gồm:
+1. Cài đặt các gói hệ thống cần thiết
+2. Cài đặt IDE đã chọn
+3. Cài đặt Flutter SDK
+4. Cấu hình biến môi trường
+5. Cài đặt Android SDK
+6. Kiểm tra cài đặt
+"""
     }
 }
 
@@ -303,6 +359,181 @@ def uninstall_app(package_name: str = None, lang: str = 'en') -> None:
     else:
         print(f"\033[91m{get_message('uninstall_failed', lang)}{package_name}\033[0m")
 
+def check_vscode_installed() -> bool:
+    """Check if VSCode is installed."""
+    try:
+        result = subprocess.run(['which', 'code'], capture_output=True, text=True)
+        return result.returncode == 0
+    except Exception:
+        return False
+
+def check_android_studio_installed() -> bool:
+    """Check if Android Studio is installed."""
+    try:
+        result = subprocess.run(['which', 'android-studio'], capture_output=True, text=True)
+        return result.returncode == 0 or os.path.exists('/usr/local/android-studio')
+    except Exception:
+        return False
+
+def check_flutter_installed() -> bool:
+    """Check if Flutter SDK is installed."""
+    try:
+        result = subprocess.run(['which', 'flutter'], capture_output=True, text=True)
+        if result.returncode == 0:
+            # Also check if it's working properly
+            version_result = subprocess.run(['flutter', '--version'], capture_output=True, text=True)
+            return version_result.returncode == 0
+        return False
+    except Exception:
+        return False
+
+def install_vscode(lang: str = 'en') -> bool:
+    """Install Visual Studio Code on Ubuntu."""
+    if check_vscode_installed():
+        print(f"\n\033[93m{get_message('already_installed', lang)}Visual Studio Code\033[0m")
+        # Just install/update Flutter extension
+        run_command('code --install-extension Dart-Code.flutter', lang)
+        return True
+
+    print(f"\n\033[94m{get_message('installing', lang)}Visual Studio Code...\033[0m")
+    
+    try:
+        # Add Microsoft GPG key and repository
+        run_command('wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > packages.microsoft.gpg', lang)
+        run_command('sudo install -D -o root -g root -m 644 packages.microsoft.gpg /etc/apt/keyrings/packages.microsoft.gpg', lang)
+        run_command('sudo sh -c \'echo "deb [arch=amd64,arm64,armhf signed-by=/etc/apt/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" > /etc/apt/sources.list.d/vscode.list\'', lang)
+        
+        # Install VSCode
+        run_command('sudo apt-get update', lang)
+        if run_command('sudo apt-get install -y code', lang):
+            # Install Flutter extension
+            run_command('code --install-extension Dart-Code.flutter', lang)
+            return True
+    except Exception as e:
+        print(f"\033[91m{get_message('setup_failed', lang)}{e}\033[0m")
+    
+    return False
+
+def install_android_studio(lang: str = 'en') -> bool:
+    """Install Android Studio on Ubuntu."""
+    if check_android_studio_installed():
+        print(f"\n\033[93m{get_message('already_installed', lang)}Android Studio\033[0m")
+        return True
+
+    print(f"\n\033[94m{get_message('installing', lang)}Android Studio...\033[0m")
+    
+    try:
+        # Add repository and install
+        run_command('sudo add-apt-repository -y ppa:maarten-fonville/android-studio', lang)
+        run_command('sudo apt-get update', lang)
+        return run_command('sudo apt-get install -y android-studio', lang)
+    except Exception as e:
+        print(f"\033[91m{get_message('setup_failed', lang)}{e}\033[0m")
+    
+    return False
+
+def install_flutter_sdk(lang: str = 'en') -> bool:
+    """Install Flutter SDK."""
+    if check_flutter_installed():
+        print(f"\n\033[93m{get_message('already_installed', lang)}Flutter SDK\033[0m")
+        return True
+
+    print(f"\n\033[94m{get_message('installing', lang)}Flutter SDK...\033[0m")
+    
+    try:
+        # Install dependencies
+        print(f"\n{get_message('installing_deps', lang)}")
+        deps = [
+            'curl',
+            'git',
+            'unzip',
+            'xz-utils',
+            'zip',
+            'libglu1-mesa',
+            'openjdk-11-jdk'
+        ]
+        run_command(f'sudo apt-get install -y {" ".join(deps)}', lang)
+        
+        # Download and extract Flutter SDK
+        home = os.path.expanduser('~')
+        sdk_path = os.path.join(home, 'development', 'flutter')
+        
+        if not os.path.exists(os.path.dirname(sdk_path)):
+            os.makedirs(os.path.dirname(sdk_path))
+        
+        print(f"\n{get_message('downloading', lang)}Flutter SDK...")
+        run_command('curl -O https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.19.3-stable.tar.xz', lang)
+        
+        print(f"\n{get_message('extracting', lang)}Flutter SDK...")
+        run_command('tar xf flutter_linux_3.19.3-stable.tar.xz -C ~/development', lang)
+        
+        # Add to PATH
+        print(f"\n{get_message('configuring', lang)}")
+        bashrc_path = os.path.join(home, '.bashrc')
+        flutter_path = f'export PATH="$PATH:{sdk_path}/bin"'
+        
+        with open(bashrc_path, 'a') as f:
+            f.write(f'\n# Flutter\n{flutter_path}\n')
+        
+        # Initial setup
+        os.environ['PATH'] = f"{os.environ['PATH']}:{sdk_path}/bin"
+        run_command('flutter precache', lang)
+        run_command('flutter doctor --android-licenses', lang)
+        
+        return True
+    except Exception as e:
+        print(f"\033[91m{get_message('setup_failed', lang)}{e}\033[0m")
+    
+    return False
+
+def setup_environment(lang: str = 'en') -> None:
+    """Setup development environment."""
+    print(f"\n{get_message('setup_instructions', lang)}")
+    
+    # Check what's already installed
+    print(f"\n{get_message('checking_installed', lang)}")
+    vscode_installed = check_vscode_installed()
+    android_studio_installed = check_android_studio_installed()
+    flutter_installed = check_flutter_installed()
+    
+    if vscode_installed:
+        print(f"\033[93m{get_message('already_installed', lang)}Visual Studio Code\033[0m")
+    if android_studio_installed:
+        print(f"\033[93m{get_message('already_installed', lang)}Android Studio\033[0m")
+    if flutter_installed:
+        print(f"\033[93m{get_message('already_installed', lang)}Flutter SDK\033[0m")
+    
+    # Only show IDE selection if not all are installed
+    if not (vscode_installed and android_studio_installed):
+        print(f"\n{get_message('select_ide', lang)}")
+        ide_options = get_message('ide_options', lang)
+        for i, option in enumerate(ide_options, 1):
+            print(f"{i}) {option}")
+        
+        while True:
+            try:
+                choice = int(input("\nEnter choice (1-3): "))
+                if 1 <= choice <= 3:
+                    break
+            except ValueError:
+                pass
+            print(f"\033[91m{get_message('invalid_choice', lang)}\033[0m")
+        
+        # Install selected IDE(s)
+        if choice in [1, 3] and not vscode_installed:
+            if not install_vscode(lang):
+                return
+        if choice in [2, 3] and not android_studio_installed:
+            if not install_android_studio(lang):
+                return
+    
+    # Install Flutter SDK if not installed
+    if not flutter_installed:
+        if not install_flutter_sdk(lang):
+            return
+    
+    print(f"\n\033[92m{get_message('setup_complete', lang)}\033[0m")
+
 def show_flutter_menu(config: Dict = None):
     """Show interactive Flutter tools menu."""
     lang = 'vi' if config and config.get('ui_language') == 'vi' else 'en'
@@ -339,6 +570,8 @@ def show_flutter_menu(config: Dict = None):
             run_command('flutter pub get', lang)
         elif choice == '6':
             run_command('flutter doctor', lang)
+        elif choice == '7':
+            setup_environment(lang)
         elif choice == '0':
             break
         else:
