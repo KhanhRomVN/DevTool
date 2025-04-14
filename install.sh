@@ -6,7 +6,7 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-echo -e "${BLUE}DTL (Developer Tool) Installation${NC}"
+echo -e "${BLUE}Developer Tool Installation${NC}"
 echo "--------------------------------"
 
 # Check for python3
@@ -27,40 +27,41 @@ fi
 echo "Cleaning up any existing installations..."
 
 # Remove from /usr/local/bin (requires sudo)
-if [ -f "/usr/local/bin/dtl" ]; then
+if [ -f "/usr/local/bin/dev_tool" ]; then
     echo "Removing from /usr/local/bin..."
-    sudo rm "/usr/local/bin/dtl"
+    sudo rm "/usr/local/bin/dev_tool"
 fi
 
 # Remove from ~/.local/bin
-if [ -L "$HOME/.local/bin/dtl" ]; then
+if [ -L "$HOME/.local/bin/dev_tool" ]; then
     echo "Removing from ~/.local/bin..."
-    rm "$HOME/.local/bin/dtl"
+    rm "$HOME/.local/bin/dev_tool"
 fi
 
 # Remove any existing pipx installation
-if pipx list | grep -q "dtl"; then
+if pipx list | grep -q "dev_tool"; then
     echo "Removing existing pipx installation..."
-    pipx uninstall dtl
+    pipx uninstall dev_tool
 fi
 
 # Always remove old configuration to force fresh setup
-CONFIG_DIR="$HOME/.config/dtl"
+CONFIG_DIR="$HOME/.config/dev_tool"
 if [ -d "$CONFIG_DIR" ]; then
     echo "Removing old configuration..."
     rm -rf "$CONFIG_DIR"
 fi
 
 # Install the package using pipx
-echo "Installing dtl..."
+echo "Installing dev_tool..."
 pipx install .
 
 echo -e "\n${GREEN}Installation completed successfully!${NC}"
-echo -e "You can now use the 'dtl' command to manage your development tasks."
+echo -e "You can now use the 'dev_tool' command to manage your development tasks."
 echo -e "\nAvailable commands:"
-echo "  dtl help              # Show help message"
-echo "  dtl config           # Configure settings"
-echo "  dtl auto-commit      # Generate commit message and handle git operations"
+echo "  dev_tool help              # Show help message"
+echo "  dev_tool config           # Configure settings"
+echo "  dev_tool auto-commit      # Generate commit message and handle git operations"
+echo "  dev_tool flutter          # Flutter development tools"
 echo -e "\nAuto-commit options:"
 echo "  --no-push           # Skip automatic push"
 echo "  --no-review         # Skip code review"
@@ -75,9 +76,9 @@ fi
 
 # Final verification
 echo -e "\n${BLUE}Verifying installation...${NC}"
-if command -v dtl &> /dev/null; then
-    echo -e "${GREEN}dtl is successfully installed and available in your PATH${NC}"
-    which dtl
+if command -v dev_tool &> /dev/null; then
+    echo -e "${GREEN}dev_tool is successfully installed and available in your PATH${NC}"
+    which dev_tool
     
     # Verify configuration directory is clean
     if [ -d "$CONFIG_DIR" ]; then
@@ -86,7 +87,7 @@ if command -v dtl &> /dev/null; then
         echo -e "${GREEN}Clean installation - you will be prompted for configuration on first run.${NC}"
     fi
 else
-    echo -e "${RED}Warning: dtl command not found in PATH. Please run:${NC}"
+    echo -e "${RED}Warning: dev_tool command not found in PATH. Please run:${NC}"
     echo "source ~/.bashrc"
     echo "or open a new terminal"
 fi

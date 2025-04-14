@@ -6,7 +6,7 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-echo -e "${BLUE}Auto-Commit Tool Uninstallation${NC}"
+echo -e "${BLUE}Developer Tool Uninstallation${NC}"
 echo "--------------------------------"
 
 # Check if pipx is installed
@@ -18,27 +18,27 @@ fi
 echo "Cleaning up all installations..."
 
 # Remove from /usr/local/bin (requires sudo)
-if [ -f "/usr/local/bin/auto-commit" ]; then
+if [ -f "/usr/local/bin/dev_tool" ]; then
     echo "Removing from /usr/local/bin..."
-    sudo rm "/usr/local/bin/auto-commit"
+    sudo rm "/usr/local/bin/dev_tool"
 fi
 
 # Remove from ~/.local/bin
-if [ -L "$HOME/.local/bin/auto-commit" ]; then
+if [ -L "$HOME/.local/bin/dev_tool" ]; then
     echo "Removing from ~/.local/bin..."
-    rm "$HOME/.local/bin/auto-commit"
+    rm "$HOME/.local/bin/dev_tool"
 fi
 
 # Remove pipx installation if exists
 if command -v pipx &> /dev/null; then
-    if pipx list | grep -q "auto-commit"; then
+    if pipx list | grep -q "dev_tool"; then
         echo "Removing pipx installation..."
-        pipx uninstall auto-commit
+        pipx uninstall dev_tool
     fi
 fi
 
 # Remove configuration directory with force
-CONFIG_DIR="$HOME/.config/auto-commit"
+CONFIG_DIR="$HOME/.config/dev_tool"
 if [ -d "$CONFIG_DIR" ]; then
     echo "Removing configuration directory..."
     rm -rf "$CONFIG_DIR"
@@ -58,9 +58,9 @@ echo -e "\n${BLUE}Verifying uninstallation...${NC}"
 FOUND_ISSUES=0
 
 # Check command availability
-if command -v auto-commit &> /dev/null; then
-    echo -e "${RED}Warning: auto-commit is still available in PATH at:${NC}"
-    which auto-commit
+if command -v dev_tool &> /dev/null; then
+    echo -e "${RED}Warning: dev_tool is still available in PATH at:${NC}"
+    which dev_tool
     FOUND_ISSUES=1
 fi
 
@@ -72,7 +72,7 @@ if [ -d "$CONFIG_DIR" ]; then
 fi
 
 if [ $FOUND_ISSUES -eq 0 ]; then
-    echo -e "${GREEN}auto-commit has been completely removed from your system${NC}"
+    echo -e "${GREEN}dev_tool has been completely removed from your system${NC}"
 else
     echo -e "\n${RED}Some components could not be removed automatically.${NC}"
     echo "Please remove them manually or contact support."

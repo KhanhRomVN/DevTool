@@ -1,5 +1,5 @@
 Metadata-Version: 2.4
-Name: auto-commit
+Name: dev_tool
 Version: 1.0.0
 Requires-Dist: google-generativeai
 Dynamic: requires-dist

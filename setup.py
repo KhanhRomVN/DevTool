@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="dtl",
+    name="dev_tool",
     version="1.0.0",
     packages=find_packages(),
     install_requires=[
@@ -9,7 +9,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'dtl=auto_commit.cli:main',
+            'dev_tool=dev_tool.cli:main',
         ],
     },
 )

@@ -1,6 +1,6 @@
-# Auto-Commit Tool
+# Developer Tool
 
-A command-line tool that automatically generates meaningful commit messages using Google's Gemini AI and handles git commits and pushes. It also includes automatic code review capabilities.
+A command-line tool that automatically generates meaningful commit messages using Google's Gemini AI and handles git commits and pushes. It also includes automatic code review capabilities and Flutter development tools.
 
 ## Features
 
@@ -12,6 +12,7 @@ A command-line tool that automatically generates meaningful commit messages usin
 - Automatic commit message generation
 - Configurable default behaviors
 - Proper emoji formatting for commit types
+- Flutter development tools
 - Runs in isolated virtual environment
 
 ## Interface Languages
@@ -22,7 +23,7 @@ The tool supports two separate language settings:
    - English: All prompts and messages in English
    - Tiếng Việt: All prompts and messages in Vietnamese
    - Selected during installation
-   - Can be changed with `auto-commit --reconfigure`
+   - Can be changed with `dev_tool --reconfigure`
 
 2. **Commit Message Language**
    - English: Professional commit messages
@@ -62,7 +63,7 @@ You can manage all settings through the configuration menu:
 
 ```bash
 # Open configuration menu
-dtl --reconfigure
+dev_tool --reconfigure
 ```
 
 Available settings:
@@ -82,16 +83,19 @@ Default behaviors:
 Basic usage:
 ```bash
 # Full process with default settings
-dtl auto-commit
+dev_tool auto-commit
 
 # Override auto-push setting
-dtl --no-push
+dev_tool --no-push
 
 # Override auto-review setting
-dtl --no-review
+dev_tool --no-review
 
 # Configure all settings
-dtl --reconfigure
+dev_tool --reconfigure
+
+# Flutter development tools
+dev_tool flutter
 ```
 
 ## Code Review Features
@@ -133,7 +137,7 @@ Available types:
 
 ## Configuration Storage
 
-Settings are stored in `~/.config/auto-commit/config.json`:
+Settings are stored in `~/.config/dev_tool/config.json`:
 - Gemini API key
 - Model preference
 - Interface language
@@ -162,8 +166,8 @@ If you encounter issues:
 
 To reset all settings:
 ```bash
-rm -rf ~/.config/auto-commit
-auto-commit --reconfigure
+rm -rf ~/.config/dev_tool
+dev_tool --reconfigure
 ```
 
 ## License
