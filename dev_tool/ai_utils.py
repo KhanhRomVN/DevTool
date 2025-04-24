@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from typing import Dict, Optional
+import sys
 import google.generativeai as genai
 
 from .messages import get_message, print_error, COLORS
