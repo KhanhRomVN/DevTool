@@ -1,0 +1,151 @@
+# .github/workflows/build.yml
+name: Build Cross-Platform Packages
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build"
+        required: true
+        default: "2.0.0"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Windows EXE
+        run: python build.py --platform windows --version ${{ github.event.inputs.version || '2.0.0' }}
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-builds
+          path: dist/*.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Install Snapcraft
+        run: |
+          sudo snap install snapcraft --classic
+
+      - name: Build Linux Snap
+        run: python build.py --platform linux --version ${{ github.event.inputs.version || '2.0.0' }}
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-builds
+          path: dist/*.snap
+
+  build-python:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install build tools
+        run: |
+          pip install wheel setuptools
+
+      - name: Build Python Wheel
+        run: python build.py --platform python --version ${{ github.event.inputs.version || '2.0.0' }}
+
+      - name: Upload Python artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: python-builds
+          path: dist/*.whl
+
+  create-release:
+    needs: [build-windows, build-linux, build-python]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: windows-builds
+          path: ./artifacts/
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: linux-builds
+          path: ./artifacts/
+
+      - name: Download Python artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: python-builds
+          path: ./artifacts/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name || format('v{0}', github.event.inputs.version) }}
+          name: "Dev Tool ${{ github.ref_name || github.event.inputs.version }}"
+          files: ./artifacts/*
+          body: |
+            ## Dev Tool Release
+
+            ### 📦 Installation Options:
+
+            **Windows:**
+            - Download `dev_tool_v*_windows_amd64.exe`
+            - Double-click to run
+
+            **Linux (Snap):**
+            ```bash
+            sudo snap install dev-tool_v*_linux_amd64.snap --dangerous
+            ```
+
+            **Python (Any OS):**
+            ```bash
+            pip install dev_tool-*-py3-none-any.whl
+            ```
+
+            ### 🚀 Usage:
+            ```bash
+            dev_tool              # Generate AI commit message
+            dev_tool --no-push    # Commit without push
+            dev_tool settings     # Open settings
+            ```
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
