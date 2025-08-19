@@ -1,2 +1,0 @@
-[console_scripts]
-dev_tool = dev_tool.cli:main

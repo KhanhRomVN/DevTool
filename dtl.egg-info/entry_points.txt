@@ -1,2 +1,0 @@
-[console_scripts]
-dtl = auto_commit.cli:main

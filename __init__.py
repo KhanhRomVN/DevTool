@@ -14,5 +14,5 @@ from .messages import get_message, print_header, print_section, print_error
 from .git_utils import get_git_diff, commit_changes, push_changes
 from .ai_utils import review_code, generate_commit_message
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 __author__ = "KhanhRomVN"
