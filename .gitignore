@@ -2,3 +2,9 @@ build/
 dist/
 venv/
 *.spec
+deb_build/
+dev_tool.spec
+dev_tool/
+__pycache__/
+__pycache__
+dev_tool/__pycache__

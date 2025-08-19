@@ -21,13 +21,27 @@ def get_version():
                     break
     return version
 
+def update_version(new_version):
+    """Update version in all relevant files"""
+    # Update __init__.py
+    init_file = Path(__file__).parent / "dev_tool" / "__init__.py"
+    if init_file.exists():
+        content = init_file.read_text()
+        current_version = get_version()
+        content = content.replace(f'__version__ = "{current_version}"', f'__version__ = "{new_version}"')
+        init_file.write_text(content)
+    
+    # Update setup.py
+    setup_file = Path(__file__).parent / "setup.py"
+    if setup_file.exists():
+        content = setup_file.read_text()
+        # Look for version= pattern
+        import re
+        content = re.sub(r'version="[^"]*"', f'version="{new_version}"', content)
+        setup_file.write_text(content)
+
 def build_windows_exe(version):
-    """Build Windows executable (only works on Windows)"""
-    if platform.system().lower() != "windows":
-        print("⚠️  Windows EXE can only be built on Windows platform")
-        print("💡 Use GitHub Actions or Docker for cross-compilation")
-        return None
-        
+    """Build Windows executable"""
     try:
         # Install PyInstaller if not available
         subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
@@ -43,251 +57,257 @@ def build_windows_exe(version):
         if build_dir.exists():
             shutil.rmtree(build_dir)
         
-        # Build with PyInstaller
+        # Build with PyInstaller - Fixed syntax
         dev_tool_dir = base_dir / "dev_tool"
+        
+        # Use proper separator for current OS
+        separator = ";" if platform.system().lower() == "windows" else ":"
         
         cmd = [
             sys.executable, "-m", "PyInstaller",
             "--name=dev_tool",
             "--onefile",
             "--console",
-            f"--add-data={dev_tool_dir};dev_tool",
+            f"--add-data={dev_tool_dir}{separator}dev_tool",
             "--hidden-import=google.generativeai",
             "--hidden-import=colorama",
-            # Add Windows specific optimizations
-            "--noupx",
-            "--clean",
             str(dev_tool_dir / "cli.py")
         ]
         
-        # Add icon if exists
-        icon_path = base_dir / "icon.ico"
-        if icon_path.exists():
-            cmd.append(f"--icon={icon_path}")
-        
-        print("🔨 Building Windows executable...")
+        print("🔨 Building executable...")
         subprocess.check_call(cmd, cwd=base_dir)
         
         # Rename with version
-        original_exe = dist_dir / "dev_tool.exe"
-        versioned_exe = dist_dir / f"dev_tool_v{version}_windows_amd64.exe"
+        exe_name = "dev_tool.exe" if platform.system().lower() == "windows" else "dev_tool"
+        original_exe = dist_dir / exe_name
+        
+        platform_name = platform.system().lower()
+        arch = platform.machine().lower()
+        if arch == "x86_64":
+            arch = "amd64"
+        elif arch in ["aarch64", "arm64"]:
+            arch = "arm64"
+        
+        new_name = f"dev_tool_v{version}_{platform_name}_{arch}"
+        if platform.system().lower() == "windows":
+            new_name += ".exe"
+        
+        versioned_exe = dist_dir / new_name
         
         if original_exe.exists():
             shutil.move(str(original_exe), str(versioned_exe))
-            print(f"✅ Windows EXE built: {versioned_exe}")
+            print(f"✅ Executable built: {versioned_exe}")
             return versioned_exe
         return None
         
     except Exception as e:
-        print(f"❌ Windows EXE build failed: {e}")
+        print(f"❌ Build failed: {e}")
+        return None
+
+def build_windows_msi(version, exe_path):
+    """Build Windows MSI installer"""
+    try:
+        # Check if WiX Toolset is available
+        if not shutil.which("candle") or not shutil.which("light"):
+            print("⚠️  WiX Toolset not found. Skipping MSI build.")
+            print("   Install from: https://wixtoolset.org/")
+            return None
+            
+        base_dir = Path(__file__).parent
+        wix_dir = base_dir / "wix"
+        wix_dir.mkdir(exist_ok=True)
+        
+        # Create WXS file
+        wxs_content = f'''<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Product Id="*" Name="Dev Tool" Language="1033" Version="{version}" 
+             Manufacturer="Dev Tool Team" UpgradeCode="a1b2c3d4-e5f6-7890-g1h2-i3j4k5l6m7n8">
+        <Package InstallerVersion="200" Compressed="yes" Comments="Windows Installer Package"/>
+        <Media Id="1" Cabinet="media1.cab" EmbedCab="yes"/>
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="ProgramFilesFolder">
+                <Directory Id="INSTALLDIR" Name="Dev Tool">
+                    <Component Id="MainExecutable" Guid="a1b2c3d4-e5f6-7890-g1h2-i3j4k5l6m7n9">
+                        <File Id="dev_tool.exe" Source="{exe_path}" KeyPath="yes"/>
+                        <Environment Id="PATH" Name="PATH" Value="[INSTALLDIR]" Permanent="no" Part="last" Action="set" System="yes"/>
+                    </Component>
+                </Directory>
+            </Directory>
+        </Directory>
+        <Feature Id="Complete" Title="Dev Tool" Level="1">
+            <ComponentRef Id="MainExecutable"/>
+        </Feature>
+    </Product>
+</Wix>'''
+        
+        wxs_file = wix_dir / "dev_tool.wxs"
+        with open(wxs_file, "w") as f:
+            f.write(wxs_content)
+        
+        # Build MSI
+        print("🔨 Building Windows MSI installer...")
+        subprocess.check_call([
+            "candle", str(wxs_file), "-o", str(wix_dir / "dev_tool.wixobj")
+        ], cwd=wix_dir)
+        
+        subprocess.check_call([
+            "light", str(wix_dir / "dev_tool.wixobj"), "-o", 
+            str(base_dir / "dist" / f"dev_tool_v{version}_windows.msi")
+        ], cwd=wix_dir)
+        
+        msi_path = base_dir / "dist" / f"dev_tool_v{version}_windows.msi"
+        if msi_path.exists():
+            print(f"✅ Windows MSI built: {msi_path}")
+            return msi_path
+        return None
+        
+    except Exception as e:
+        print(f"❌ MSI build failed: {e}")
+        return None
+
+def build_linux_deb(version):
+    """Build Linux DEB package"""
+    try:
+        base_dir = Path(__file__).parent
+        deb_dir = base_dir / "deb_build"
+        dist_dir = base_dir / "dist"
+        
+        # Create dist directory first
+        dist_dir.mkdir(exist_ok=True)
+        
+        # Clean previous build
+        if deb_dir.exists():
+            shutil.rmtree(deb_dir)
+        deb_dir.mkdir(exist_ok=True)
+        
+        # Create DEB structure
+        debian_dir = deb_dir / "DEBIAN"
+        debian_dir.mkdir(exist_ok=True)
+        
+        usr_bin_dir = deb_dir / "usr" / "bin"
+        usr_bin_dir.mkdir(parents=True, exist_ok=True)
+        
+        usr_lib_dir = deb_dir / "usr" / "lib" / "dev_tool"
+        usr_lib_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create control file
+        control_content = f'''Package: dev-tool
+Version: {version}
+Section: utils
+Priority: optional
+Architecture: all
+Maintainer: Dev Tool Team <khanhromvn@gmail.com>
+Description: AI-powered Git commit message generator
+ Dev Tool is an AI-powered assistant that generates meaningful
+ commit messages based on your code changes using Google's Gemini AI.
+Homepage: https://github.com/your-repo/dev_tool
+Depends: python3, python3-pip
+'''
+        
+        with open(debian_dir / "control", "w") as f:
+            f.write(control_content)
+        
+        # Copy the Python package
+        shutil.copytree(base_dir / "dev_tool", usr_lib_dir, dirs_exist_ok=True)
+        
+        # Create executable script
+        with open(usr_bin_dir / "dev_tool", "w") as f:
+            f.write('''#!/bin/bash
+python3 /usr/lib/dev_tool/cli.py "$@"
+''')
+        os.chmod(usr_bin_dir / "dev_tool", 0o755)
+        
+        # Create postinst script for dependencies
+        with open(debian_dir / "postinst", "w") as f:
+            f.write('''#!/bin/bash
+pip3 install google-generativeai>=0.3.0 colorama>=0.4.0
+''')
+        os.chmod(debian_dir / "postinst", 0o755)
+        
+        # Build DEB package
+        print("🔨 Building Linux DEB package...")
+        deb_filename = f"dev-tool_{version}_all.deb"
+        subprocess.check_call([
+            "dpkg-deb", "--build", str(deb_dir), str(dist_dir / deb_filename)
+        ])
+        
+        deb_path = dist_dir / deb_filename
+        if deb_path.exists():
+            print(f"✅ Linux DEB package built: {deb_path}")
+            return deb_path
+        return None
+        
+    except Exception as e:
+        print(f"❌ DEB build failed: {e}")
         return None
 
 def build_linux_snap(version):
     """Build Linux Snap package"""
-    if platform.system().lower() != "linux":
-        print("⚠️  Snap packages can only be built on Linux")
-        return None
-        
     try:
-        # Check if snapcraft is available
         if not shutil.which("snapcraft"):
-            print("❌ Snapcraft not found. Installing...")
-            try:
-                subprocess.check_call(["sudo", "snap", "install", "snapcraft", "--classic"])
-            except subprocess.CalledProcessError:
-                print("❌ Failed to install snapcraft. Please install manually:")
-                print("   sudo snap install snapcraft --classic")
-                return None
-        
+            print("⚠️  Snapcraft not found. Skipping Snap build.")
+            print("   Install with: sudo snap install snapcraft --classic")
+            return None
+            
         base_dir = Path(__file__).parent
+        
+        # Create snapcraft.yaml in snap directory
         snap_dir = base_dir / "snap"
         snap_dir.mkdir(exist_ok=True)
         
-        # Create optimized snapcraft.yaml
         snapcraft_content = f'''name: dev-tool
-base: core22
 version: '{version}'
 summary: AI-powered Git commit message generator
 description: |
   Dev Tool is an AI-powered assistant that generates meaningful
   commit messages based on your code changes using Google's Gemini AI.
-  
-  Features:
-  - Smart commit message generation
-  - Multi-language support (English/Vietnamese)
-  - Multiple commit styles (Conventional/Emoji/Descriptive)
-  - Cross-platform compatibility
 
 grade: stable
 confinement: strict
+base: core20
 
 apps:
   dev-tool:
     command: bin/dev_tool
-    plugs: 
-      - home
-      - network
-      - network-bind
-      - removable-media
-    environment:
-      LC_ALL: C.UTF-8
-      LANG: C.UTF-8
+    plugs: [home, network, network-bind]
 
 parts:
   dev-tool:
     plugin: python
     source: .
-    python-requirements:
-      - requirements.txt
+    python-packages:
+      - google-generativeai>=0.3.0
+      - colorama>=0.4.0
     stage-packages:
-      - git
-    override-build: |
-      craftctl default
-      # Create wrapper script
-      mkdir -p $CRAFTCTL_PART_INSTALL/bin
-      cat > $CRAFTCTL_PART_INSTALL/bin/dev_tool << 'EOF'
-#!/bin/bash
-export PYTHONPATH="$SNAP/lib/python3.10/site-packages:$PYTHONPATH"
-cd "$HOME" || cd /tmp
-exec "$SNAP/bin/python3" -m dev_tool.cli "$@"
-EOF
-      chmod +x $CRAFTCTL_PART_INSTALL/bin/dev_tool
+      - python3
+      - python3-pip
 '''
         
-        snapcraft_file = snap_dir / "snapcraft.yaml"
-        with open(snapcraft_file, "w") as f:
+        with open(snap_dir / "snapcraft.yaml", "w") as f:
             f.write(snapcraft_content)
         
         # Build Snap
         print("🔨 Building Linux Snap package...")
-        subprocess.check_call(["snapcraft", "--verbose"], cwd=base_dir)
+        subprocess.check_call(["snapcraft"], cwd=base_dir)
         
-        # Find and rename snap file
+        # Move to dist directory
         snap_files = list(base_dir.glob("*.snap"))
         if snap_files:
             snap_path = snap_files[0]
-            dist_dir = base_dir / "dist" 
-            dist_dir.mkdir(exist_ok=True)
-            
-            new_name = f"dev-tool_v{version}_linux_amd64.snap"
-            final_snap = dist_dir / new_name
-            
-            shutil.move(str(snap_path), str(final_snap))
-            print(f"✅ Linux Snap built: {final_snap}")
-            return final_snap
+            dist_snap = base_dir / "dist" / f"dev-tool_{version}.snap"
+            shutil.move(str(snap_path), str(dist_snap))
+            print(f"✅ Linux Snap package built: {dist_snap}")
+            return dist_snap
         return None
         
     except Exception as e:
         print(f"❌ Snap build failed: {e}")
-        print("💡 Make sure you have snapcraft installed: sudo snap install snapcraft --classic")
         return None
-
-def create_github_actions_workflow(version):
-    """Create GitHub Actions workflow for cross-platform builds"""
-    base_dir = Path(__file__).parent
-    github_dir = base_dir / ".github" / "workflows"
-    github_dir.mkdir(parents=True, exist_ok=True)
-    
-    workflow_content = f'''name: Build Cross-Platform Packages
-
-on:
-  push:
-    tags:
-      - 'v*'
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to build'
-        required: true
-        default: '{version}'
-
-jobs:
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-          
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install pyinstaller
-          
-      - name: Build Windows EXE
-        run: python build.py --platform windows
-        
-      - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: windows-exe
-          path: dist/*.exe
-
-  build-linux:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-          
-      - name: Install Snapcraft
-        run: |
-          sudo snap install snapcraft --classic
-          sudo snap install multipass
-          
-      - name: Build Linux Snap
-        run: python build.py --platform linux
-        
-      - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: linux-snap
-          path: dist/*.snap
-
-  create-release:
-    needs: [build-windows, build-linux]
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v3
-        
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            windows-exe/*
-            linux-snap/*
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{{{ secrets.GITHUB_TOKEN }}}}
-'''
-    
-    workflow_file = github_dir / "build.yml"
-    with open(workflow_file, "w") as f:
-        f.write(workflow_content)
-    
-    print(f"✅ GitHub Actions workflow created: {workflow_file}")
-    print("💡 Push to GitHub with tags to trigger cross-platform builds")
-    return workflow_file
 
 def build_python_wheel(version):
     """Build Python wheel package"""
     try:
         base_dir = Path(__file__).parent
-        
-        # Ensure setup.py exists
-        setup_file = base_dir / "setup.py"
-        if not setup_file.exists():
-            print("❌ setup.py not found in root directory")
-            return None
         
         print("🔨 Building Python wheel...")
         subprocess.check_call([sys.executable, "setup.py", "bdist_wheel"], cwd=base_dir)
@@ -297,7 +317,7 @@ def build_python_wheel(version):
         wheel_files = list(wheel_dir.glob("*.whl"))
         
         if wheel_files:
-            wheel_path = wheel_files[-1]
+            wheel_path = wheel_files[-1]  # Get the most recent one
             print(f"✅ Python wheel built: {wheel_path}")
             return wheel_path
         return None
@@ -306,98 +326,82 @@ def build_python_wheel(version):
         print(f"❌ Wheel build failed: {e}")
         return None
 
-def show_cross_platform_help():
-    """Show help for cross-platform building"""
-    current_platform = platform.system().lower()
+def create_release_info(version, artifacts):
+    """Create release information file"""
+    base_dir = Path(__file__).parent
+    dist_dir = base_dir / "dist"
     
-    print(f"""
-🌍 Cross-Platform Build Guide
-============================
+    release_info = f"""# Dev Tool v{version} Release
 
-Current platform: {current_platform.title()}
+## Installation Instructions
 
-Available builds:
-{"✅ Windows EXE" if current_platform == "windows" else "❌ Windows EXE (requires Windows)"}
-{"✅ Linux Snap" if current_platform == "linux" else "❌ Linux Snap (requires Linux)"}
-✅ Python Wheel (any platform)
+### Binary Executables
+"""
+    
+    for artifact in artifacts:
+        if artifact and artifact.exists():
+            name = artifact.name
+            size = artifact.stat().st_size
+            size_mb = size / (1024 * 1024)
+            
+            if name.endswith('.exe'):
+                release_info += f"\n### Windows Executable\n- File: `{name}`\n- Size: {size_mb:.1f} MB\n- Install: Download and run\n"
+            elif name.endswith('.deb'):
+                release_info += f"\n### Ubuntu/Debian Package\n- File: `{name}`\n- Size: {size_mb:.1f} MB\n- Install: `sudo dpkg -i {name}`\n"
+            elif name.endswith('.snap'):
+                release_info += f"\n### Snap Package\n- File: `{name}`\n- Size: {size_mb:.1f} MB\n- Install: `sudo snap install {name} --dangerous`\n"
+            elif name.endswith('.whl'):
+                release_info += f"\n### Python Wheel\n- File: `{name}`\n- Size: {size_mb:.1f} MB\n- Install: `pip install {name}`\n"
+            elif name.endswith('.msi'):
+                release_info += f"\n### Windows Installer\n- File: `{name}`\n- Size: {size_mb:.1f} MB\n- Install: Double-click to install\n"
+    
+    release_info += """
+### From Source
+```bash
+git clone https://github.com/your-repo/dev_tool
+cd dev_tool
+pip install -e .
+```
 
-🚀 Recommended approaches:
-
-1️⃣  GitHub Actions (Automatic):
-   - Push code to GitHub
-   - Create workflow: python build.py --create-workflow
-   - Tag release: git tag v2.0.0 && git push --tags
-
-2️⃣  Docker (Manual cross-compilation):
-   - Install Docker
-   - Run: python build.py --docker
-
-3️⃣  Platform-specific VMs:
-   - Windows VM for .exe
-   - Linux VM for .snap
-
-4️⃣  Python wheel (universal):
-   - Works on all platforms
-   - Users install with: pip install dev_tool-2.0.0-py3-none-any.whl
-    """)
+## Usage
+```bash
+dev_tool              # Generate commit message and commit
+dev_tool --no-push    # Commit without pushing  
+dev_tool settings     # Open settings menu
+```
+"""
+    
+    with open(dist_dir / "RELEASE_INFO.md", "w") as f:
+        f.write(release_info)
+    
+    print(f"✅ Release info created: {dist_dir / 'RELEASE_INFO.md'}")
 
 def main():
     """Main build function"""
-    parser = argparse.ArgumentParser(
-        description="Build Dev Tool packages",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python build.py --platform windows    # Build Windows EXE (Windows only)
-  python build.py --platform linux      # Build Linux Snap (Linux only)
-  python build.py --platform python     # Build Python wheel (any platform)
-  python build.py --create-workflow     # Create GitHub Actions workflow
-  python build.py --help-cross          # Show cross-platform help
-        """
-    )
-    
-    parser.add_argument("--platform", choices=["windows", "linux", "python"], 
+    parser = argparse.ArgumentParser(description="Build Dev Tool packages")
+    parser.add_argument("--platform", choices=["windows", "linux", "python", "all"], 
+                       default="all",
                        help="Target platform to build for")
     parser.add_argument("--version", help="Set version (optional)")
-    parser.add_argument("--create-workflow", action="store_true", 
-                       help="Create GitHub Actions workflow")
-    parser.add_argument("--help-cross", action="store_true",
-                       help="Show cross-platform build help")
-    
     args = parser.parse_args()
-    
-    if args.help_cross:
-        show_cross_platform_help()
-        return
     
     current_version = get_version()
     
     # Handle version update
     if args.version:
-        current_version = args.version
-        print(f"✅ Version set to: {current_version}")
+        new_version = args.version
+        update_version(new_version)
+        current_version = new_version
+        print(f"✅ Version updated to: {current_version}")
     else:
+        # Ask for version confirmation/update
         print(f"📦 Current version: {current_version}")
         new_version = input("🆕 Enter new version (or press Enter to keep current): ").strip()
+        
         if new_version:
+            update_version(new_version)
             current_version = new_version
             print(f"✅ Version updated to: {current_version}")
-    
-    # Create GitHub Actions workflow
-    if args.create_workflow:
-        create_github_actions_workflow(current_version)
-        return
-    
-    # Auto-detect platform if not specified
-    if not args.platform:
-        current_os = platform.system().lower()
-        if current_os == "windows":
-            args.platform = "windows"
-        elif current_os == "linux":
-            args.platform = "linux"
-        else:
-            args.platform = "python"
-        print(f"🎯 Auto-detected platform: {args.platform}")
     
     # Create dist directory
     dist_dir = Path(__file__).parent / "dist"
@@ -405,42 +409,43 @@ Examples:
     
     artifacts = []
     
-    # Build for specified platform
-    if args.platform == "windows":
+    # Build for requested platforms
+    if args.platform in ["windows", "all"]:
         exe_path = build_windows_exe(current_version)
         if exe_path:
             artifacts.append(exe_path)
+            msi_path = build_windows_msi(current_version, exe_path)
+            if msi_path:
+                artifacts.append(msi_path)
     
-    elif args.platform == "linux":
+    if args.platform in ["linux", "all"]:
+        deb_path = build_linux_deb(current_version)
+        if deb_path:
+            artifacts.append(deb_path)
+        
         snap_path = build_linux_snap(current_version)
         if snap_path:
             artifacts.append(snap_path)
     
-    elif args.platform == "python":
+    if args.platform in ["python", "all"]:
         wheel_path = build_python_wheel(current_version)
         if wheel_path:
             artifacts.append(wheel_path)
     
-    # Show results
-    print(f"\n🎉 Build process completed!")
+    # Create release information
+    create_release_info(current_version, artifacts)
+    
+    print("\n🎉 Build process completed!")
     print(f"📁 Build artifacts in: {dist_dir}")
     
-    if artifacts:
-        print(f"✅ Successfully built:")
-        for artifact in artifacts:
+    # Show summary
+    successful_builds = [a for a in artifacts if a and a.exists()]
+    if successful_builds:
+        print(f"✅ Successfully built {len(successful_builds)} packages:")
+        for artifact in successful_builds:
             print(f"   📦 {artifact.name}")
-            
-        # Show usage instructions
-        print(f"\n📋 Usage Instructions:")
-        if args.platform == "windows":
-            print(f"   Windows: Double-click {artifacts[0].name}")
-        elif args.platform == "linux":
-            print(f"   Linux: sudo snap install {artifacts[0].name} --dangerous")
-        elif args.platform == "python":
-            print(f"   Any OS: pip install {artifacts[0].name}")
     else:
         print("⚠️  No packages were successfully built.")
-        print("💡 Run with --help-cross for cross-platform options")
 
 if __name__ == "__main__":
     main()
