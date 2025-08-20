@@ -46,6 +46,150 @@ print_header() {
     echo -e "${NC}"
 }
 
+# Enhanced platform detection function
+detect_platform() {
+    local os=""
+    local arch=""
+    
+    # Detect OS with better Windows detection
+    case "$(uname -s)" in
+        Linux*)     os="linux";;
+        Darwin*)    os="darwin";;
+        CYGWIN*|MINGW*|MSYS*)   os="windows";;
+        *)          
+            # Additional Windows detection
+            if [[ -n "$WINDIR" ]] || [[ -n "$SYSTEMROOT" ]]; then
+                os="windows"
+            else
+                print_error "Unsupported operating system: $(uname -s)"
+                exit 1
+            fi
+            ;;
+    esac
+    
+    # Detect architecture
+    case "$(uname -m)" in
+        x86_64|amd64)   arch="amd64";;
+        arm64|aarch64)  arch="arm64";;
+        armv6l)         arch="armv6";;
+        armv7l)         arch="armv7";;
+        i386|i686)      arch="386";;
+        *)
+            print_error "Unsupported architecture: $(uname -m)"
+            exit 1
+            ;;
+    esac
+    
+    echo "${os}_${arch}"
+}
+
+# Enhanced function to detect if running on Windows
+is_windows() {
+    [[ "$(uname -s)" == CYGWIN* ]] || [[ "$(uname -s)" == MINGW* ]] || [[ "$(uname -s)" == MSYS* ]] || [[ -n "$WINDIR" ]]
+}
+
+# Enhanced function to get proper install directory
+get_install_directory() {
+    if [[ "$EUID" -eq 0 ]]; then
+        # Root user - install system-wide
+        echo "/usr/local/bin"
+    else
+        # Regular user - handle Windows vs Unix differently
+        if is_windows; then
+            # Windows: Use USERPROFILE if available, otherwise HOME
+            local user_bin=""
+            if [[ -n "$USERPROFILE" ]]; then
+                # Convert Windows path to Unix format for Git Bash
+                user_bin="$(cygpath -u "$USERPROFILE" 2>/dev/null || echo "$USERPROFILE")/.local/bin"
+            else
+                user_bin="$HOME/.local/bin"
+            fi
+            
+            # Ensure directory exists
+            mkdir -p "$user_bin"
+            echo "$user_bin"
+        else
+            # Unix-like systems
+            if [[ -d "$HOME/.local/bin" ]]; then
+                echo "$HOME/.local/bin"
+            else
+                mkdir -p "$HOME/.local/bin"
+                echo "$HOME/.local/bin"
+            fi
+        fi
+    fi
+}
+
+# Enhanced function to add directory to PATH
+add_to_path() {
+    local install_dir="$1"
+    local shell_profile=""
+    local path_export=""
+    
+    # Determine shell profile
+    if [[ -n "$BASH_VERSION" ]]; then
+        if is_windows; then
+            # On Windows Git Bash, prefer .bash_profile over .bashrc
+            if [[ -f "$HOME/.bash_profile" ]]; then
+                shell_profile="$HOME/.bash_profile"
+            else
+                shell_profile="$HOME/.bashrc"
+            fi
+        else
+            shell_profile="$HOME/.bashrc"
+        fi
+    elif [[ -n "$ZSH_VERSION" ]]; then
+        shell_profile="$HOME/.zshrc"
+    else
+        shell_profile="$HOME/.profile"
+    fi
+    
+    # Prepare PATH export statement
+    if is_windows; then
+        # On Windows, normalize the path and ensure proper format
+        local normalized_dir="$install_dir"
+        # Convert to Unix format if needed
+        if [[ "$install_dir" == *":"* ]]; then
+            normalized_dir="$(cygpath -u "$install_dir" 2>/dev/null || echo "$install_dir")"
+        fi
+        path_export="export PATH=\"${normalized_dir}:\$PATH\""
+    else
+        path_export="export PATH=\"${install_dir}:\$PATH\""
+    fi
+    
+    # Check if already in PATH config
+    local path_pattern=""
+    if is_windows; then
+        path_pattern="\.local/bin"
+    else
+        path_pattern="\.local/bin"
+    fi
+    
+    if ! grep -q "export PATH.*${path_pattern}" "$shell_profile" 2>/dev/null; then
+        echo "" >> "$shell_profile"
+        echo "# Local binaries" >> "$shell_profile"
+        echo "$path_export" >> "$shell_profile"
+        print_success "Added $install_dir to PATH in $shell_profile"
+        
+        # Also add to current session
+        export PATH="$install_dir:$PATH"
+        
+        # On Windows, also try to add to current session with different formats
+        if is_windows; then
+            # Try multiple path formats to ensure compatibility
+            export PATH="$install_dir:$PATH"
+            if [[ -n "$USERPROFILE" ]]; then
+                local win_path="$(cygpath -w "$install_dir" 2>/dev/null || echo "$install_dir")"
+                export PATH="$install_dir:$PATH"
+            fi
+        fi
+    else
+        print_info "PATH already configured in $shell_profile"
+        # Still add to current session
+        export PATH="$install_dir:$PATH"
+    fi
+}
+
 # Function to read input safely (works with piped scripts)
 read_input() {
     local prompt="$1"
@@ -115,38 +259,6 @@ get_version_status() {
         1) echo "newer version" ;;
         2) echo "older version" ;;
     esac
-}
-
-# Detect OS and architecture
-detect_platform() {
-    local os=""
-    local arch=""
-    
-    # Detect OS
-    case "$(uname -s)" in
-        Linux*)     os="linux";;
-        Darwin*)    os="darwin";;
-        CYGWIN*|MINGW*|MSYS*) os="windows";;
-        *)          
-            print_error "Unsupported operating system: $(uname -s)"
-            exit 1
-            ;;
-    esac
-    
-    # Detect architecture
-    case "$(uname -m)" in
-        x86_64|amd64)   arch="amd64";;
-        arm64|aarch64)  arch="arm64";;
-        armv6l)         arch="armv6";;
-        armv7l)         arch="armv7";;
-        i386|i686)      arch="386";;
-        *)
-            print_error "Unsupported architecture: $(uname -m)"
-            exit 1
-            ;;
-    esac
-    
-    echo "${os}_${arch}"
 }
 
 # Check if Go is installed
@@ -235,11 +347,18 @@ install_go_automatically() {
         exit 1
     fi
     
-    # Install Go
-    local install_dir="/usr/local"
+    # Install Go - enhanced for Windows
+    local install_dir=""
     if [[ "$EUID" -ne 0 ]]; then
-        install_dir="$HOME/.local"
+        if is_windows && [[ -n "$USERPROFILE" ]]; then
+            # Use USERPROFILE on Windows
+            install_dir="$(cygpath -u "$USERPROFILE" 2>/dev/null || echo "$USERPROFILE")/.local"
+        else
+            install_dir="$HOME/.local"
+        fi
         mkdir -p "$install_dir"
+    else
+        install_dir="/usr/local"
     fi
     
     print_info "Installing Go to ${install_dir}..."
@@ -260,22 +379,8 @@ install_go_automatically() {
     local go_bin="${install_dir}/go/bin"
     export PATH="$go_bin:$PATH"
     
-    # Add to shell profile
-    local shell_profile=""
-    if [[ -n "$BASH_VERSION" ]]; then
-        shell_profile="$HOME/.bashrc"
-    elif [[ -n "$ZSH_VERSION" ]]; then
-        shell_profile="$HOME/.zshrc"
-    else
-        shell_profile="$HOME/.profile"
-    fi
-    
-    if ! grep -q "export PATH.*go/bin" "$shell_profile" 2>/dev/null; then
-        echo "" >> "$shell_profile"
-        echo "# Go" >> "$shell_profile"
-        echo "export PATH=\"${go_bin}:\$PATH\"" >> "$shell_profile"
-        print_success "Added Go to PATH in $shell_profile"
-    fi
+    # Add to shell profile with Windows compatibility
+    add_go_to_path "$go_bin"
     
     # Clean up
     rm -rf "$temp_dir"
@@ -286,6 +391,38 @@ install_go_automatically() {
     else
         print_error "Go installation failed"
         exit 1
+    fi
+}
+
+# Enhanced function to add Go to PATH
+add_go_to_path() {
+    local go_bin="$1"
+    local shell_profile=""
+    
+    if [[ -n "$BASH_VERSION" ]]; then
+        if is_windows; then
+            shell_profile="$HOME/.bash_profile"
+            [[ ! -f "$shell_profile" ]] && shell_profile="$HOME/.bashrc"
+        else
+            shell_profile="$HOME/.bashrc"
+        fi
+    elif [[ -n "$ZSH_VERSION" ]]; then
+        shell_profile="$HOME/.zshrc"
+    else
+        shell_profile="$HOME/.profile"
+    fi
+    
+    if ! grep -q "export PATH.*go/bin" "$shell_profile" 2>/dev/null; then
+        echo "" >> "$shell_profile"
+        echo "# Go" >> "$shell_profile"
+        if is_windows; then
+            # Normalize path for Windows
+            local normalized_go_bin="$go_bin"
+            echo "export PATH=\"${normalized_go_bin}:\$PATH\"" >> "$shell_profile"
+        else
+            echo "export PATH=\"${go_bin}:\$PATH\"" >> "$shell_profile"
+        fi
+        print_success "Added Go to PATH in $shell_profile"
     fi
 }
 
@@ -300,6 +437,9 @@ download_prebuilt_binary() {
     
     local temp_dir=$(mktemp -d)
     local binary_path="${temp_dir}/${BINARY_NAME}"
+    if [[ "$platform" == *"windows"* ]]; then
+        binary_path="${binary_path}.exe"
+    fi
     
     print_info "Downloading pre-built binary for $platform..."
     
@@ -345,67 +485,73 @@ build_from_source() {
     # Build the tool
     print_info "Building binary..."
     go mod tidy
-    go build -o "$BINARY_NAME" .
+    
+    # Build with appropriate extension for Windows
+    local binary_name="$BINARY_NAME"
+    if is_windows; then
+        binary_name="${BINARY_NAME}.exe"
+    fi
+    
+    go build -o "$binary_name" .
     
     # Install binary
-    install_binary "./${BINARY_NAME}"
+    install_binary "./${binary_name}"
     
     # Clean up
     cd /
     rm -rf "$temp_dir"
 }
 
-# Install binary to system
+# Enhanced install binary function
 install_binary() {
     local binary_path="$1"
-    local install_dir=""
+    local install_dir=$(get_install_directory)
     
     # Make binary executable
     chmod +x "$binary_path"
     
-    # Determine install directory
-    if [[ "$EUID" -eq 0 ]]; then
-        # Root user - install system-wide
-        install_dir="/usr/local/bin"
-    else
-        # Regular user - install to user directory
-        if [[ -d "$HOME/.local/bin" ]]; then
-            install_dir="$HOME/.local/bin"
-        else
-            mkdir -p "$HOME/.local/bin"
-            install_dir="$HOME/.local/bin"
-        fi
-        
-        # Add to PATH if not already there
-        local shell_profile=""
-        if [[ -n "$BASH_VERSION" ]]; then
-            shell_profile="$HOME/.bashrc"
-        elif [[ -n "$ZSH_VERSION" ]]; then
-            shell_profile="$HOME/.zshrc"
-        else
-            shell_profile="$HOME/.profile"
-        fi
-        
-        if ! grep -q "export PATH.*\.local/bin" "$shell_profile" 2>/dev/null; then
-            echo "" >> "$shell_profile"
-            echo "# Local binaries" >> "$shell_profile"
-            echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> "$shell_profile"
-            print_success "Added ~/.local/bin to PATH in $shell_profile"
-        fi
+    print_info "Installing to $install_dir..."
+    
+    # Determine final binary name
+    local final_binary_name="$BINARY_NAME"
+    if is_windows && [[ "$binary_path" == *.exe ]]; then
+        final_binary_name="${BINARY_NAME}.exe"
     fi
     
     # Copy binary
-    print_info "Installing to $install_dir..."
-    cp "$binary_path" "${install_dir}/${BINARY_NAME}"
+    cp "$binary_path" "${install_dir}/${final_binary_name}"
     
-    # Verify installation
-    export PATH="$install_dir:$PATH"
-    if command -v "$BINARY_NAME" >/dev/null 2>&1; then
+    # Add to PATH
+    add_to_path "$install_dir"
+    
+    # Verify installation with multiple attempts
+    local verification_attempts=3
+    local verified=false
+    
+    for ((i=1; i<=verification_attempts; i++)); do
+        # Try different command formats
+        if command -v "$BINARY_NAME" >/dev/null 2>&1 || \
+           command -v "${install_dir}/${BINARY_NAME}" >/dev/null 2>&1 || \
+           (is_windows && command -v "${BINARY_NAME}.exe" >/dev/null 2>&1); then
+            verified=true
+            break
+        fi
+        
+        if [[ $i -lt $verification_attempts ]]; then
+            print_info "Verification attempt $i failed, retrying..."
+            sleep 1
+            # Re-export PATH
+            export PATH="$install_dir:$PATH"
+        fi
+    done
+    
+    if $verified; then
         print_success "$TOOL_NAME installed successfully!"
-        print_info "Installation location: ${install_dir}/${BINARY_NAME}"
+        print_info "Installation location: ${install_dir}/${final_binary_name}"
     else
-        print_error "Installation verification failed"
-        exit 1
+        print_warning "Installation completed but verification failed"
+        print_info "Binary installed to: ${install_dir}/${final_binary_name}"
+        print_info "You may need to restart your terminal or run 'source ~/.bashrc'"
     fi
 }
 
@@ -425,6 +571,17 @@ check_requirements() {
         print_info "Please consider installing Git for full functionality."
     fi
     
+    # Windows-specific checks
+    if is_windows; then
+        print_info "Detected Windows environment (Git Bash/MSYS2/Cygwin)"
+        
+        # Check if we can create directories
+        local test_dir="$HOME/.local"
+        if ! mkdir -p "$test_dir" 2>/dev/null; then
+            print_warning "Cannot create user directories. Installation may fail."
+        fi
+    fi
+    
     print_success "System requirements check passed"
 }
 
@@ -432,14 +589,43 @@ check_requirements() {
 post_install_setup() {
     print_info "Running post-installation setup..."
     
-    # Create initial configuration
-    if ! "$BINARY_NAME" --version >/dev/null 2>&1; then
-        print_warning "Tool verification failed. You may need to restart your shell."
-        print_info "Run 'source ~/.bashrc' or restart your terminal."
+    # Try multiple ways to verify installation
+    local tool_found=false
+    
+    if command -v "$BINARY_NAME" >/dev/null 2>&1; then
+        tool_found=true
+    elif is_windows && command -v "${BINARY_NAME}.exe" >/dev/null 2>&1; then
+        tool_found=true
     else
+        # Try direct path
+        local install_dir=$(get_install_directory)
+        if [[ -f "${install_dir}/${BINARY_NAME}" ]]; then
+            export PATH="$install_dir:$PATH"
+            if command -v "$BINARY_NAME" >/dev/null 2>&1; then
+                tool_found=true
+            fi
+        elif is_windows && [[ -f "${install_dir}/${BINARY_NAME}.exe" ]]; then
+            export PATH="$install_dir:$PATH"
+            if command -v "${BINARY_NAME}.exe" >/dev/null 2>&1; then
+                tool_found=true
+            fi
+        fi
+    fi
+    
+    if $tool_found; then
         print_success "Tool is ready to use!"
         print_info "Run '$BINARY_NAME settings' to configure your preferences."
         print_info "Run '$BINARY_NAME --help' for usage information."
+    else
+        print_warning "Tool verification failed. You may need to restart your shell."
+        if is_windows; then
+            print_info "Try one of these commands:"
+            print_info "  - Restart Git Bash"
+            print_info "  - Run 'source ~/.bash_profile' or 'source ~/.bashrc'"
+            print_info "  - Add to PATH manually: export PATH=\"\$HOME/.local/bin:\$PATH\""
+        else
+            print_info "Run 'source ~/.bashrc' or restart your terminal."
+        fi
     fi
 }
 
@@ -453,6 +639,23 @@ uninstall() {
         "$HOME/.local/bin/${BINARY_NAME}"
         "/usr/bin/${BINARY_NAME}"
     )
+    
+    # Add Windows-specific locations
+    if is_windows; then
+        binary_locations+=(
+            "$HOME/.local/bin/${BINARY_NAME}.exe"
+            "$(get_install_directory)/${BINARY_NAME}"
+            "$(get_install_directory)/${BINARY_NAME}.exe"
+        )
+        
+        if [[ -n "$USERPROFILE" ]]; then
+            local user_bin="$(cygpath -u "$USERPROFILE" 2>/dev/null || echo "$USERPROFILE")/.local/bin"
+            binary_locations+=(
+                "${user_bin}/${BINARY_NAME}"
+                "${user_bin}/${BINARY_NAME}.exe"
+            )
+        fi
+    fi
     
     local found=false
     for location in "${binary_locations[@]}"; do
@@ -557,6 +760,9 @@ show_current_settings() {
         
         echo "----------------------------------------"
         print_info "Run '$BINARY_NAME settings' for detailed configuration."
+    elif is_windows && command -v "${BINARY_NAME}.exe" >/dev/null 2>&1; then
+        print_info "Tool found as ${BINARY_NAME}.exe"
+        "${BINARY_NAME}.exe" --version 2>/dev/null || echo "Version check failed"
     else
         print_warning "Tool is not currently accessible."
     fi
@@ -572,11 +778,27 @@ main() {
         exit 0
     fi
     
+    # Platform detection and info
+    local platform=$(detect_platform)
+    if is_windows; then
+        print_info "Detected platform: $platform (Windows environment)"
+    else
+        print_info "Detected platform: $platform"
+    fi
+    
     # Check system requirements
     check_requirements
     
     # Check if already installed and show detailed info
+    local tool_exists=false
     if command -v "$BINARY_NAME" >/dev/null 2>&1; then
+        tool_exists=true
+    elif is_windows && command -v "${BINARY_NAME}.exe" >/dev/null 2>&1; then
+        tool_exists=true
+        BINARY_NAME="${BINARY_NAME}.exe"  # Adjust for Windows
+    fi
+    
+    if $tool_exists; then
         # Try to get current version
         local current_version=$("$BINARY_NAME" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
         
@@ -620,13 +842,29 @@ main() {
     print_success "🎉 Installation completed successfully!"
     
     # Show final version info
-    if command -v "$BINARY_NAME" >/dev/null 2>&1; then
-        local final_version=$("$BINARY_NAME" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "$VERSION")
+    local final_binary="$BINARY_NAME"
+    if is_windows && ! command -v "$BINARY_NAME" >/dev/null 2>&1 && command -v "${BINARY_NAME}.exe" >/dev/null 2>&1; then
+        final_binary="${BINARY_NAME}.exe"
+    fi
+    
+    if command -v "$final_binary" >/dev/null 2>&1; then
+        local final_version=$("$final_binary" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "$VERSION")
         print_info "✨ $TOOL_NAME version $final_version is now ready to use!"
     fi
     
-    print_info "You may need to restart your terminal or run 'source ~/.bashrc' to use the tool."
-    print_info "Get started with: $BINARY_NAME --help"
+    # Platform-specific final instructions
+    if is_windows; then
+        echo ""
+        print_info "📝 Windows-specific instructions:"
+        print_info "   - You may need to restart Git Bash or your terminal"
+        print_info "   - Or run: source ~/.bash_profile (or ~/.bashrc)"
+        print_info "   - If still not found, add manually: export PATH=\"\$HOME/.local/bin:\$PATH\""
+        print_info "   - Verify with: $final_binary --help"
+    else
+        print_info "You may need to restart your terminal or run 'source ~/.bashrc' to use the tool."
+    fi
+    
+    print_info "Get started with: $final_binary --help"
 }
 
 # Run main function
