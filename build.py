@@ -71,6 +71,8 @@ def build_windows_exe(version):
             f"--add-data={dev_tool_dir}{separator}dev_tool",
             "--hidden-import=google.generativeai",
             "--hidden-import=colorama",
+            "--collect-all=google.generativeai",
+            "--collect-all=colorama",
             str(dev_tool_dir / "cli.py")
         ]
         
@@ -165,84 +167,8 @@ def build_windows_msi(version, exe_path):
         print(f"❌ MSI build failed: {e}")
         return None
 
-def build_linux_deb(version):
-    """Build Linux DEB package"""
-    try:
-        base_dir = Path(__file__).parent
-        deb_dir = base_dir / "deb_build"
-        dist_dir = base_dir / "dist"
-        
-        # Create dist directory first
-        dist_dir.mkdir(exist_ok=True)
-        
-        # Clean previous build
-        if deb_dir.exists():
-            shutil.rmtree(deb_dir)
-        deb_dir.mkdir(exist_ok=True)
-        
-        # Create DEB structure
-        debian_dir = deb_dir / "DEBIAN"
-        debian_dir.mkdir(exist_ok=True)
-        
-        usr_bin_dir = deb_dir / "usr" / "bin"
-        usr_bin_dir.mkdir(parents=True, exist_ok=True)
-        
-        usr_lib_dir = deb_dir / "usr" / "lib" / "dev_tool"
-        usr_lib_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Create control file
-        control_content = f'''Package: dev-tool
-Version: {version}
-Section: utils
-Priority: optional
-Architecture: all
-Maintainer: Dev Tool Team <khanhromvn@gmail.com>
-Description: AI-powered Git commit message generator
- Dev Tool is an AI-powered assistant that generates meaningful
- commit messages based on your code changes using Google's Gemini AI.
-Homepage: https://github.com/your-repo/dev_tool
-Depends: python3, python3-pip
-'''
-        
-        with open(debian_dir / "control", "w") as f:
-            f.write(control_content)
-        
-        # Copy the Python package
-        shutil.copytree(base_dir / "dev_tool", usr_lib_dir, dirs_exist_ok=True)
-        
-        # Create executable script
-        with open(usr_bin_dir / "dev_tool", "w") as f:
-            f.write('''#!/bin/bash
-python3 /usr/lib/dev_tool/cli.py "$@"
-''')
-        os.chmod(usr_bin_dir / "dev_tool", 0o755)
-        
-        # Create postinst script for dependencies
-        with open(debian_dir / "postinst", "w") as f:
-            f.write('''#!/bin/bash
-pip3 install google-generativeai>=0.3.0 colorama>=0.4.0
-''')
-        os.chmod(debian_dir / "postinst", 0o755)
-        
-        # Build DEB package
-        print("🔨 Building Linux DEB package...")
-        deb_filename = f"dev-tool_{version}_all.deb"
-        subprocess.check_call([
-            "dpkg-deb", "--build", str(deb_dir), str(dist_dir / deb_filename)
-        ])
-        
-        deb_path = dist_dir / deb_filename
-        if deb_path.exists():
-            print(f"✅ Linux DEB package built: {deb_path}")
-            return deb_path
-        return None
-        
-    except Exception as e:
-        print(f"❌ DEB build failed: {e}")
-        return None
-
 def build_linux_snap(version):
-    """Build Linux Snap package"""
+    """Build Linux Snap package with all dependencies included"""
     try:
         if not shutil.which("snapcraft"):
             print("⚠️  Snapcraft not found. Skipping Snap build.")
@@ -263,7 +189,7 @@ description: |
   commit messages based on your code changes using Google's Gemini AI.
 
 grade: stable
-confinement: strict
+confinement: classic
 base: core20
 
 apps:
@@ -273,14 +199,33 @@ apps:
 
 parts:
   dev-tool:
-    plugin: python
+    plugin: dump
     source: .
-    python-packages:
-      - google-generativeai>=0.3.0
-      - colorama>=0.4.0
+    organize:
+      dev_tool: bin/dev_tool
     stage-packages:
       - python3
       - python3-pip
+    override-build: |
+      set -e
+      mkdir -p $SNAPCRAFT_PART_INSTALL/bin
+      mkdir -p $SNAPCRAFT_PART_INSTALL/lib/python3.8/site-packages
+      
+      # Install all Python dependencies
+      pip3 install --target=$SNAPCRAFT_PART_INSTALL/lib/python3.8/site-packages \\
+        google-generativeai>=0.3.0 \\
+        colorama>=0.4.0
+      
+      # Copy the dev_tool package
+      cp -r dev_tool $SNAPCRAFT_PART_INSTALL/lib/python3.8/site-packages/
+      
+      # Create the executable wrapper
+      cat > $SNAPCRAFT_PART_INSTALL/bin/dev_tool << 'EOF'
+#!/bin/bash
+export PYTHONPATH=$SNAPCRAFT_PART_INSTALL/lib/python3.8/site-packages:$PYTHONPATH
+python3 $SNAPCRAFT_PART_INSTALL/lib/python3.8/site-packages/dev_tool/cli.py "$@"
+EOF
+      chmod +x $SNAPCRAFT_PART_INSTALL/bin/dev_tool
 '''
         
         with open(snap_dir / "snapcraft.yaml", "w") as f:
@@ -361,91 +306,3 @@ def create_release_info(version, artifacts):
 git clone https://github.com/your-repo/dev_tool
 cd dev_tool
 pip install -e .
-```
-
-## Usage
-```bash
-dev_tool              # Generate commit message and commit
-dev_tool --no-push    # Commit without pushing  
-dev_tool settings     # Open settings menu
-```
-"""
-    
-    with open(dist_dir / "RELEASE_INFO.md", "w") as f:
-        f.write(release_info)
-    
-    print(f"✅ Release info created: {dist_dir / 'RELEASE_INFO.md'}")
-
-def main():
-    """Main build function"""
-    parser = argparse.ArgumentParser(description="Build Dev Tool packages")
-    parser.add_argument("--platform", choices=["windows", "linux", "python", "all"], 
-                       default="all",
-                       help="Target platform to build for")
-    parser.add_argument("--version", help="Set version (optional)")
-    args = parser.parse_args()
-    
-    current_version = get_version()
-    
-    # Handle version update
-    if args.version:
-        new_version = args.version
-        update_version(new_version)
-        current_version = new_version
-        print(f"✅ Version updated to: {current_version}")
-    else:
-        # Ask for version confirmation/update
-        print(f"📦 Current version: {current_version}")
-        new_version = input("🆕 Enter new version (or press Enter to keep current): ").strip()
-        
-        if new_version:
-            update_version(new_version)
-            current_version = new_version
-            print(f"✅ Version updated to: {current_version}")
-    
-    # Create dist directory
-    dist_dir = Path(__file__).parent / "dist"
-    dist_dir.mkdir(exist_ok=True)
-    
-    artifacts = []
-    
-    # Build for requested platforms
-    if args.platform in ["windows", "all"]:
-        exe_path = build_windows_exe(current_version)
-        if exe_path:
-            artifacts.append(exe_path)
-            msi_path = build_windows_msi(current_version, exe_path)
-            if msi_path:
-                artifacts.append(msi_path)
-    
-    if args.platform in ["linux", "all"]:
-        deb_path = build_linux_deb(current_version)
-        if deb_path:
-            artifacts.append(deb_path)
-        
-        snap_path = build_linux_snap(current_version)
-        if snap_path:
-            artifacts.append(snap_path)
-    
-    if args.platform in ["python", "all"]:
-        wheel_path = build_python_wheel(current_version)
-        if wheel_path:
-            artifacts.append(wheel_path)
-    
-    # Create release information
-    create_release_info(current_version, artifacts)
-    
-    print("\n🎉 Build process completed!")
-    print(f"📁 Build artifacts in: {dist_dir}")
-    
-    # Show summary
-    successful_builds = [a for a in artifacts if a and a.exists()]
-    if successful_builds:
-        print(f"✅ Successfully built {len(successful_builds)} packages:")
-        for artifact in successful_builds:
-            print(f"   📦 {artifact.name}")
-    else:
-        print("⚠️  No packages were successfully built.")
-
-if __name__ == "__main__":
-    main()

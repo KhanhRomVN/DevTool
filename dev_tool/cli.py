@@ -5,7 +5,7 @@ import argparse
 from typing import Dict
 
 from .config import load_config, configure_tool, reset_config, uninstall_tool
-from .messages import get_message, print_header, print_section, print_error, print_success
+from .messages import get_message, print_header, print_section, print_error, print_success, print_info
 from .git_utils import get_git_diff, commit_changes, push_changes, stage_all_changes
 from .ai_utils import generate_commit_message
 

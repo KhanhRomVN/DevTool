@@ -65,8 +65,8 @@ MESSAGES = {
         'commit_style': "Commit Style",
         'auto_push': "Auto Push",
         'auto_stage': "Auto Stage",
-        'enabled': "✅ Enabled",
-        'disabled': "❌ Disabled",
+        'enabled': "Enabled",
+        'disabled': "Disabled",
         'select_option': "Select an option",
         'invalid_option': "❌ Invalid option. Please try again.",
         'save_exit': "💾 Configuration saved successfully!",
@@ -119,7 +119,32 @@ MESSAGES = {
   Gemini 2.0 Flash      Legacy model
 
 📖 For more help: https://github.com/your-repo/dev_tool
-        """
+        """,
+        'edit_config': "Edit Configuration",
+        'reset_defaults': "Reset to Defaults",
+        'uninstall_tool': "Uninstall Tool",
+        'help_info': "Help & Information",
+        'options': "Options",
+        'change_ui_lang': "Change Interface Language",
+        'change_commit_lang': "Change Commit Language",
+        'update_api_key': "Update API Key",
+        'change_ai_model': "Change AI Model",
+        'change_commit_style': "Change Commit Style",
+        'toggle_auto_push': "Toggle Auto Push",
+        'save_back': "Save & Back to Menu",
+        'back_no_save': "Back without Saving",
+        'edit_options': "Edit Options",
+        'available_langs': "Available Languages",
+        'select_lang': "Select language",
+        'enter_api_key_prompt': "Enter new API key",
+        'available_models': "Available Models",
+        'select_model': "Select model",
+        'available_styles': "Available Styles",
+        'select_style': "Select style",
+        'confirm_toggle': "Do you want to",
+        'enable': "enable",
+        'disable': "disable",
+        'press_enter_continue': "Press Enter to continue"
     },
     'vi': {
         'welcome': "Dev Tool - Trợ Lý Git AI",
@@ -155,8 +180,8 @@ MESSAGES = {
         'commit_style': "Phong Cách Commit",
         'auto_push': "Tự Động Push",
         'auto_stage': "Tự Động Stage",
-        'enabled': "✅ Bật",
-        'disabled': "❌ Tắt",
+        'enabled': "Bật",
+        'disabled': "Tắt",
         'select_option': "Chọn một tùy chọn",
         'invalid_option': "❌ Tùy chọn không hợp lệ. Vui lòng thử lại.",
         'save_exit': "💾 Đã lưu cấu hình thành công!",
@@ -209,19 +234,44 @@ MESSAGES = {
   Gemini 2.0 Flash      Model cũ
 
 📖 Để biết thêm: https://github.com/your-repo/dev_tool
-        """
+        """,
+        'edit_config': "Chỉnh Sửa Cấu Hình",
+        'reset_defaults': "Đặt Lại Mặc Định",
+        'uninstall_tool': "Gỡ Cài Đặt Tool",
+        'help_info': "Trợ Giúp & Thông Tin",
+        'options': "Tùy Chọn",
+        'change_ui_lang': "Thay Đổi Ngôn Ngữ Giao Diện",
+        'change_commit_lang': "Thay Đổi Ngôn Ngữ Commit",
+        'update_api_key': "Cập Nhật API Key",
+        'change_ai_model': "Thay Đổi Model AI",
+        'change_commit_style': "Thay Đổi Phong Cách Commit",
+        'toggle_auto_push': "Bật/Tắt Tự Động Push",
+        'save_back': "Lưu & Quay Lại Menu",
+        'back_no_save': "Quay Lại Không Lưu",
+        'edit_options': "Tùy Chọn Chỉnh Sửa",
+        'available_langs': "Ngôn Ngữ Có Sẵn",
+        'select_lang': "Chọn ngôn ngữ",
+        'enter_api_key_prompt': "Nhập API key mới",
+        'available_models': "Model Có Sẵn",
+        'select_model': "Chọn model",
+        'available_styles': "Phong Cách Có Sẵn",
+        'select_style': "Chọn phong cách",
+        'confirm_toggle': "Bạn có muốn",
+        'enable': "bật",
+        'disable': "tắt",
+        'press_enter_continue': "Nhấn Enter để tiếp tục"
     }
 }
 
 def print_header(text: str, color: str = 'CYAN') -> None:
     """Print a beautiful formatted header."""
     width = max(len(text) + 4, 50)
-    border = "═" * width
+    border = "=" * width
     
     print(f"\n{COLORS[color]}{COLORS['BOLD']}")
-    print(f"╔{border}╗")
-    print(f"║{text.center(width)}║")
-    print(f"╚{border}╝")
+    print(border)
+    print(text.center(width))
+    print(border)
     print(f"{COLORS['END']}")
 
 def print_section(text: str, color: str = 'BLUE') -> None:
@@ -253,16 +303,16 @@ def show_welcome_banner() -> None:
     """Display a beautiful welcome banner."""
     banner = f"""
 {COLORS['CYAN']}{COLORS['BOLD']}
-   ╔══════════════════════════════════════════════╗
-   ║              🛠️  DEV TOOL 2.0                ║
-   ║          AI-Powered Git Assistant            ║
-   ║                                              ║
-   ║   🤖 Smart commit messages                   ║
-   ║   🌍 Multi-language support                  ║
-   ║   🎨 Multiple commit styles                  ║
-   ║   👥 Multi-account management               ║
-   ║   ⚙️  Cross-platform compatibility           ║
-   ╚══════════════════════════════════════════════╝
+==================================================
+              🛠️  DEV TOOL 2.0                
+          AI-Powered Git Assistant            
+                                                  
+   🤖 Smart commit messages                       
+   🌍 Multi-language support                      
+   🎨 Multiple commit styles                      
+   👥 Multi-account management                   
+   ⚙️  Cross-platform compatibility              
+==================================================
 {COLORS['END']}
 Welcome! Let's set up your AI git assistant.
     """
@@ -270,7 +320,7 @@ Welcome! Let's set up your AI git assistant.
 
 def show_menu_divider() -> None:
     """Show a decorative menu divider."""
-    print(f"{COLORS['DIM']}{'─' * 50}{COLORS['END']}")
+    print(f"{COLORS['DIM']}{'-' * 50}{COLORS['END']}")
 
 def create_progress_bar(current: int, total: int, width: int = 30) -> str:
     """Create a simple progress bar."""
