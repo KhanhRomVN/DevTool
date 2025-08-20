@@ -10,6 +10,8 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 # Tool information
@@ -36,12 +38,61 @@ print_error() {
 }
 
 print_header() {
-    echo -e "${BLUE}"
+    echo -e "${CYAN}${BOLD}"
     echo "=================================================="
     echo "           🛠️  DEV TOOL 2.0 INSTALLER           "
     echo "        AI-Powered Git Assistant Setup          "
     echo "=================================================="
     echo -e "${NC}"
+}
+
+# Function to compare versions (returns 0 if equal, 1 if v1 > v2, 2 if v1 < v2)
+compare_versions() {
+    local v1="$1"
+    local v2="$2"
+    
+    # Remove 'v' prefix if exists
+    v1=$(echo "$v1" | sed 's/^v//')
+    v2=$(echo "$v2" | sed 's/^v//')
+    
+    if [[ "$v1" == "$v2" ]]; then
+        return 0  # Equal
+    fi
+    
+    # Split versions into arrays
+    IFS='.' read -ra V1 <<< "$v1"
+    IFS='.' read -ra V2 <<< "$v2"
+    
+    # Pad arrays to same length
+    local max_len=$(( ${#V1[@]} > ${#V2[@]} ? ${#V1[@]} : ${#V2[@]} ))
+    
+    for (( i=0; i<max_len; i++ )); do
+        local n1=${V1[i]:-0}
+        local n2=${V2[i]:-0}
+        
+        if (( n1 > n2 )); then
+            return 1  # v1 > v2
+        elif (( n1 < n2 )); then
+            return 2  # v1 < v2
+        fi
+    done
+    
+    return 0  # Equal
+}
+
+# Get version status string
+get_version_status() {
+    local current_version="$1"
+    local latest_version="$2"
+    
+    compare_versions "$current_version" "$latest_version"
+    local result=$?
+    
+    case $result in
+        0) echo "same version" ;;
+        1) echo "newer version" ;;
+        2) echo "older version" ;;
+    esac
 }
 
 # Detect OS and architecture
@@ -91,10 +142,10 @@ check_go_installation() {
 # Install Go (if needed and user agrees)
 install_go() {
     print_info "Go is required to build the tool from source."
-    print_info "You have two options:"
-    echo "  1. Install Go automatically (recommended)"
-    echo "  2. Install Go manually and run this script again"
-    echo "  3. Download pre-built binary (if available)"
+    print_info "You have three options:"
+    echo -e "${CYAN}  1.${NC} Install Go automatically (recommended)"
+    echo -e "${CYAN}  2.${NC} Install Go manually and run this script again"
+    echo -e "${CYAN}  3.${NC} Download pre-built binary (if available)"
     echo ""
     
     read -p "Choose option (1/2/3): " choice
@@ -402,6 +453,82 @@ uninstall() {
     print_success "Uninstallation completed"
 }
 
+# Show installation confirmation with detailed version info
+show_install_confirmation() {
+    local current_version="$1"
+    local latest_version="$2"
+    local status="$3"
+    
+    echo -e "\n${CYAN}${BOLD}📋 Installation Information:${NC}"
+    echo -e "${YELLOW}   Current version:${NC} $current_version"
+    echo -e "${YELLOW}   Latest version:${NC}  $latest_version"
+    echo -e "${YELLOW}   Status:${NC}          $status"
+    echo ""
+    
+    case "$status" in
+        "same version")
+            print_info "You have the same version installed."
+            print_info "Reinstalling will replace your current installation."
+            ;;
+        "newer version")
+            print_warning "You have a newer version than what's being installed!"
+            print_warning "This will downgrade your installation from $current_version to $latest_version."
+            ;;
+        "older version")
+            print_success "A newer version is available!"
+            print_info "This will upgrade your installation from $current_version to $latest_version."
+            ;;
+    esac
+    
+    echo ""
+    echo -e "${BOLD}What would you like to do?${NC}"
+    echo -e "${GREEN}  y${NC} - Proceed with installation"
+    echo -e "${RED}  n${NC} - Cancel installation"
+    echo -e "${CYAN}  s${NC} - Show current tool settings"
+    echo ""
+    
+    while true; do
+        read -p "Your choice (y/n/s): " choice
+        case "$choice" in
+            [Yy]|[Yy][Ee][Ss])
+                return 0  # Proceed
+                ;;
+            [Nn]|[Nn][Oo])
+                return 1  # Cancel
+                ;;
+            [Ss])
+                show_current_settings
+                echo ""
+                ;;
+            *)
+                print_error "Invalid choice. Please enter y, n, or s."
+                ;;
+        esac
+    done
+}
+
+# Show current tool settings
+show_current_settings() {
+    if command -v "$BINARY_NAME" >/dev/null 2>&1; then
+        print_info "Current tool configuration:"
+        echo "----------------------------------------"
+        
+        # Try to get version
+        local version_output=$("$BINARY_NAME" --version 2>/dev/null || echo "Version: Unknown")
+        echo "🔧 $version_output"
+        
+        # Try to show help
+        local help_output=$("$BINARY_NAME" --help 2>/dev/null | head -5 || echo "Help not available")
+        echo "📚 Available commands:"
+        echo "$help_output"
+        
+        echo "----------------------------------------"
+        print_info "Run '$BINARY_NAME settings' for detailed configuration."
+    else
+        print_warning "Tool is not currently accessible."
+    fi
+}
+
 # Main installation function
 main() {
     print_header
@@ -415,16 +542,34 @@ main() {
     # Check system requirements
     check_requirements
     
-    # Check if already installed
+    # Check if already installed and show detailed info
     if command -v "$BINARY_NAME" >/dev/null 2>&1; then
-        local current_version=$("$BINARY_NAME" --version 2>/dev/null | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' || echo "unknown")
-        print_warning "$TOOL_NAME is already installed (version: $current_version)"
-        read -p "Do you want to reinstall? (y/N): " reinstall
+        # Try to get current version
+        local current_version=$("$BINARY_NAME" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
         
-        if [[ "$reinstall" != "y" && "$reinstall" != "Y" ]]; then
-            print_info "Installation cancelled"
+        # If version extraction failed, try alternative method
+        if [[ -z "$current_version" ]]; then
+            current_version=$("$BINARY_NAME" --version 2>/dev/null || echo "unknown")
+            current_version=$(echo "$current_version" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        fi
+        
+        # Default to "unknown" if still empty
+        if [[ -z "$current_version" ]]; then
+            current_version="unknown"
+        fi
+        
+        local status=$(get_version_status "$current_version" "$VERSION")
+        
+        # Show detailed confirmation dialog
+        if ! show_install_confirmation "$current_version" "$VERSION" "$status"; then
+            print_info "Installation cancelled by user."
             exit 0
         fi
+        
+        print_info "Proceeding with installation..."
+    else
+        print_info "$TOOL_NAME is not currently installed."
+        print_info "Installing version $VERSION..."
     fi
     
     # Try to download pre-built binary first, fallback to building from source
@@ -440,7 +585,15 @@ main() {
     post_install_setup
     
     print_success "🎉 Installation completed successfully!"
+    
+    # Show final version info
+    if command -v "$BINARY_NAME" >/dev/null 2>&1; then
+        local final_version=$("$BINARY_NAME" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "$VERSION")
+        print_info "✨ $TOOL_NAME version $final_version is now ready to use!"
+    fi
+    
     print_info "You may need to restart your terminal or run 'source ~/.bashrc' to use the tool."
+    print_info "Get started with: $BINARY_NAME --help"
 }
 
 # Run main function
