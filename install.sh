@@ -251,7 +251,7 @@ get_version_status() {
     local current_version="$1"
     local latest_version="$2"
     
-    compare_versions "$current_version" "$latest_version"
+compare_versions "$current_version" "$VERSION"
     local result=$?
     
     case $result in
@@ -493,6 +493,7 @@ build_from_source() {
     fi
     
     go build -o "$binary_name" .
+    go build -o "dev_tool_v${VERSION}" .
     
     # Install binary
     install_binary "./${binary_name}"
@@ -800,7 +801,7 @@ main() {
     
     if $tool_exists; then
         # Try to get current version
-        local current_version=$("$BINARY_NAME" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        local current_version=$("$BINARY_NAME" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown")
         
         # If version extraction failed, try alternative method
         if [[ -z "$current_version" ]]; then
