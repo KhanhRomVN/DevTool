@@ -5,7 +5,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 )
 
@@ -548,37 +547,4 @@ func ConfirmAction(message string, config Config) bool {
 	confirm = strings.TrimSpace(strings.ToLower(confirm))
 
 	return confirm == "yes"
-}
-
-func GetPrimaryAccount(config Config) *Account {
-	for i, account := range config.Accounts {
-		if account.IsPrimary {
-			return &config.Accounts[i]
-		}
-	}
-	return nil
-}
-
-// Helper function to get user input with prompt
-func GetUserInput(prompt string) string {
-	fmt.Print(prompt)
-	reader := bufio.NewReader(os.Stdin)
-	input, _ := reader.ReadString('\n')
-	return strings.TrimSpace(input)
-}
-
-// Helper function to get numeric input with validation
-func GetNumericInput(prompt string, min, max int) int {
-	for {
-		fmt.Print(prompt)
-		reader := bufio.NewReader(os.Stdin)
-		input, _ := reader.ReadString('\n')
-		input = strings.TrimSpace(input)
-
-		if num, err := strconv.Atoi(input); err == nil && num >= min && num <= max {
-			return num
-		}
-
-		fmt.Printf("Invalid input. Please enter a number between %d and %d.\n", min, max)
-	}
 }

@@ -82,7 +82,7 @@ func FormatCommitMessage(message string, style string) string {
 				// Add generic emoji if no type detected
 				lines[0] = fmt.Sprintf("📝 %s", title)
 			}
-		}
+		}undefined: GetConfigDir
 	}
 
 	// Clean up any backticks from bullet points

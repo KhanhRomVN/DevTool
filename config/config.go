@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 type Account struct {
@@ -246,4 +247,50 @@ func ShowWelcomeBanner() {
 Welcome! Let's set up your AI git assistant.
 	`
 	fmt.Println(banner)
+}
+
+func ResetConfig() Config {
+	configPath := GetConfigPath()
+	if _, err := os.Stat(configPath); err == nil {
+		os.Remove(configPath)
+	}
+
+	config := CreateInitialConfig()
+	fmt.Println("🔄 Configuration reset successfully!")
+	return config
+}
+
+func UninstallTool() {
+	fmt.Println("⚠️  This will completely remove dev_tool and all its data!")
+	fmt.Print("Are you sure you want to uninstall? (yes/no): ")
+	var confirm string
+	fmt.Scanln(&confirm)
+	confirm = strings.ToLower(confirm)
+
+	if confirm != "yes" && confirm != "y" {
+		fmt.Println("Uninstall cancelled.")
+		return
+	}
+
+	// Remove config directory
+	configDir := GetConfigDir()
+	if _, err := os.Stat(configDir); err == nil {
+		err := os.RemoveAll(configDir)
+		if err != nil {
+			fmt.Printf("Error during uninstall: %v\n", err)
+			return
+		}
+	}
+
+	fmt.Println("✅ dev_tool has been uninstalled successfully!")
+	fmt.Println("To reinstall, run: go install github.com/your-repo/dev_tool")
+}
+
+func GetPrimaryAccount(config Config) *Account {
+	for i, account := range config.Accounts {
+		if account.IsPrimary {
+			return &config.Accounts[i]
+		}
+	}
+	return nil
 }
