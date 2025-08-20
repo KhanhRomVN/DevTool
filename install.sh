@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 
 # Tool information
 TOOL_NAME="dev_tool"
-VERSION="2.0.3"
+VERSION="2.0.4"
 REPO_URL="https://github.com/KhanhRomVN/dev_tool"
 BINARY_NAME="dev_tool"
 
