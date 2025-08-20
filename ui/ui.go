@@ -189,7 +189,9 @@ func ShowSettingsMenu(cfg config.Config) config.Config {
 			}
 		case "3":
 			if ConfirmAction(messages.GetMessage("uninstall_confirm", cfg), cfg) {
+				// UninstallTool() will handle exit, so this should not return
 				config.UninstallTool()
+				// This line should never be reached due to os.Exit(0) in UninstallTool()
 				return cfg
 			}
 		case "4":

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -267,22 +268,214 @@ func UninstallTool() {
 	confirm = strings.ToLower(confirm)
 
 	if confirm != "yes" && confirm != "y" {
-		fmt.Println("Uninstall cancelled.")
+		fmt.Println("❌ Uninstall cancelled.")
 		return
 	}
 
-	// Remove config directory
+	fmt.Println("🔍 Starting uninstallation process...")
+
+	// 1. Remove config directory
 	configDir := GetConfigDir()
 	if _, err := os.Stat(configDir); err == nil {
 		err := os.RemoveAll(configDir)
 		if err != nil {
-			fmt.Printf("Error during uninstall: %v\n", err)
-			return
+			fmt.Printf("⚠️  Error removing config directory: %v\n", err)
+		} else {
+			fmt.Println("✅ Configuration files removed")
 		}
 	}
 
-	fmt.Println("✅ dev_tool has been uninstalled successfully!")
-	fmt.Println("To reinstall, run: go install github.com/KhanhRomVN/dev_tool")
+	// 2. Find and remove binary files
+	removedCount := 0
+
+	// Common binary locations
+	binaryLocations := []string{
+		"/usr/local/bin/dev_tool",
+		"/usr/bin/dev_tool",
+		filepath.Join(os.Getenv("HOME"), ".local", "bin", "dev_tool"),
+		filepath.Join(os.Getenv("HOME"), "bin", "dev_tool"),
+	}
+
+	// Add Windows-specific locations
+	if runtime.GOOS == "windows" {
+		binaryLocations = append(binaryLocations,
+			filepath.Join(os.Getenv("USERPROFILE"), "bin", "dev_tool.exe"),
+			filepath.Join(os.Getenv("PROGRAMFILES"), "dev_tool", "dev_tool.exe"),
+			"C:\\Windows\\System32\\dev_tool.exe",
+		)
+	}
+
+	// Try to get current executable path
+	if execPath, err := os.Executable(); err == nil {
+		// Resolve symlinks
+		if realPath, err := filepath.EvalSymlinks(execPath); err == nil {
+			binaryLocations = append(binaryLocations, realPath)
+		}
+		binaryLocations = append(binaryLocations, execPath)
+	}
+
+	// Try to find binary using 'which' command (Unix-like systems)
+	if runtime.GOOS != "windows" {
+		if cmd := exec.Command("which", "dev_tool"); cmd != nil {
+			if output, err := cmd.Output(); err == nil {
+				whichPath := strings.TrimSpace(string(output))
+				if whichPath != "" {
+					binaryLocations = append(binaryLocations, whichPath)
+				}
+			}
+		}
+	}
+
+	// Try to find binary using 'where' command (Windows)
+	if runtime.GOOS == "windows" {
+		if cmd := exec.Command("where", "dev_tool"); cmd != nil {
+			if output, err := cmd.Output(); err == nil {
+				wherePaths := strings.Split(strings.TrimSpace(string(output)), "\n")
+				for _, path := range wherePaths {
+					if strings.TrimSpace(path) != "" {
+						binaryLocations = append(binaryLocations, strings.TrimSpace(path))
+					}
+				}
+			}
+		}
+	}
+
+	// Remove duplicates
+	uniqueLocations := make(map[string]bool)
+	var finalLocations []string
+	for _, location := range binaryLocations {
+		if location != "" && !uniqueLocations[location] {
+			uniqueLocations[location] = true
+			finalLocations = append(finalLocations, location)
+		}
+	}
+
+	// Try to remove each binary
+	for _, location := range finalLocations {
+		if _, err := os.Stat(location); err == nil {
+			// Check if we can remove it directly
+			if err := os.Remove(location); err != nil {
+				// If direct removal fails, try with elevated privileges
+				fmt.Printf("⚠️  Could not remove %s directly, trying with elevated privileges...\n", location)
+
+				var cmd *exec.Cmd
+				if runtime.GOOS == "windows" {
+					// Windows: use runas or try direct removal
+					cmd = exec.Command("cmd", "/C", "del", "/F", "/Q", location)
+				} else {
+					// Unix-like: use sudo
+					cmd = exec.Command("sudo", "rm", "-f", location)
+				}
+
+				if err := cmd.Run(); err != nil {
+					fmt.Printf("❌ Failed to remove %s: %v\n", location, err)
+					fmt.Printf("   Please manually remove: %s\n", location)
+				} else {
+					fmt.Printf("✅ Removed binary: %s\n", location)
+					removedCount++
+				}
+			} else {
+				fmt.Printf("✅ Removed binary: %s\n", location)
+				removedCount++
+			}
+		}
+	}
+
+	// 3. Clean up Go module cache (if installed via go install)
+	if removedCount == 0 {
+		fmt.Println("🔍 Trying to clean Go module cache...")
+		if cmd := exec.Command("go", "clean", "-modcache"); cmd != nil {
+			if err := cmd.Run(); err == nil {
+				fmt.Println("✅ Go module cache cleaned")
+			}
+		}
+
+		// Try to remove from GOPATH/bin
+		if gopath := os.Getenv("GOPATH"); gopath != "" {
+			gopathBin := filepath.Join(gopath, "bin", "dev_tool")
+			if runtime.GOOS == "windows" {
+				gopathBin += ".exe"
+			}
+			if _, err := os.Stat(gopathBin); err == nil {
+				if err := os.Remove(gopathBin); err == nil {
+					fmt.Printf("✅ Removed from GOPATH: %s\n", gopathBin)
+					removedCount++
+				}
+			}
+		}
+
+		// Try to remove from GOBIN
+		if gobin := os.Getenv("GOBIN"); gobin != "" {
+			gobinPath := filepath.Join(gobin, "dev_tool")
+			if runtime.GOOS == "windows" {
+				gobinPath += ".exe"
+			}
+			if _, err := os.Stat(gobinPath); err == nil {
+				if err := os.Remove(gobinPath); err == nil {
+					fmt.Printf("✅ Removed from GOBIN: %s\n", gobinPath)
+					removedCount++
+				}
+			}
+		}
+	}
+
+	// 4. Try to remove from Go's bin directory
+	if home := os.Getenv("HOME"); home != "" && runtime.GOOS != "windows" {
+		goBinPath := filepath.Join(home, "go", "bin", "dev_tool")
+		if _, err := os.Stat(goBinPath); err == nil {
+			if err := os.Remove(goBinPath); err == nil {
+				fmt.Printf("✅ Removed from Go bin: %s\n", goBinPath)
+				removedCount++
+			}
+		}
+	}
+
+	// 5. Windows-specific: remove from user profile
+	if runtime.GOOS == "windows" {
+		if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
+			userGoBin := filepath.Join(userProfile, "go", "bin", "dev_tool.exe")
+			if _, err := os.Stat(userGoBin); err == nil {
+				if err := os.Remove(userGoBin); err == nil {
+					fmt.Printf("✅ Removed from user Go bin: %s\n", userGoBin)
+					removedCount++
+				}
+			}
+		}
+	}
+
+	// 6. Final verification
+	fmt.Println("\n🔍 Verifying uninstallation...")
+
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("where", "dev_tool")
+	} else {
+		cmd = exec.Command("which", "dev_tool")
+	}
+
+	if output, err := cmd.Output(); err == nil && strings.TrimSpace(string(output)) != "" {
+		fmt.Println("⚠️  dev_tool may still be available in PATH:")
+		fmt.Println(strings.TrimSpace(string(output)))
+		fmt.Println("Please manually remove the remaining files or restart your terminal.")
+	} else {
+		fmt.Println("✅ dev_tool successfully removed from PATH")
+	}
+
+	// Summary
+	if removedCount > 0 {
+		fmt.Printf("\n🎉 Successfully removed %d binary file(s)\n", removedCount)
+	} else {
+		fmt.Println("\n⚠️  No binary files were found/removed")
+		fmt.Println("The tool may have been installed in a non-standard location")
+		fmt.Println("Please check manually with: which dev_tool (Linux/macOS) or where dev_tool (Windows)")
+	}
+
+	fmt.Println("✅ dev_tool uninstallation completed!")
+	fmt.Println("📝 To reinstall, run: go install github.com/KhanhRomVN/dev_tool")
+
+	// Important: Exit the program to prevent further execution
+	fmt.Println("\n👋 Goodbye!")
+	os.Exit(0)
 }
 
 func GetPrimaryAccount(config Config) *Account {
