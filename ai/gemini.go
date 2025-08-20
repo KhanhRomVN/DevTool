@@ -1,5 +1,4 @@
-// ai/gemini.go
-package main
+package ai
 
 import (
 	"bytes"

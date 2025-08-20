@@ -1,25 +1,27 @@
 // ui/ui.go
-package main
+package ui
 
 import (
 	"bufio"
+	"dev_tool/config"
+	"dev_tool/messages"
 	"fmt"
 	"os"
 	"strings"
 )
 
-func ShowCurrentConfig(config Config) {
-	PrintSection(GetMessage("current_config", config), "PURPLE")
+func ShowCurrentConfig(cfg config.Config) {
+	messages.PrintSection(messages.GetMessage("current_config", cfg), "PURPLE")
 
 	// Language settings
-	uiLangDisplay := GetMessage("lang_1", config)
-	if config.UILanguage == "vi" {
-		uiLangDisplay = GetMessage("lang_2", config)
+	uiLangDisplay := messages.GetMessage("lang_1", cfg)
+	if cfg.UILanguage == "vi" {
+		uiLangDisplay = messages.GetMessage("lang_2", cfg)
 	}
 
-	commitLangDisplay := GetMessage("lang_1", config)
-	if config.CommitLanguage == "vi" {
-		commitLangDisplay = GetMessage("lang_2", config)
+	commitLangDisplay := messages.GetMessage("lang_1", cfg)
+	if cfg.CommitLanguage == "vi" {
+		commitLangDisplay = messages.GetMessage("lang_2", cfg)
 	}
 
 	// Commit style display
@@ -32,18 +34,18 @@ func ShowCurrentConfig(config Config) {
 
 	// Model display
 	modelDisplay := "Unknown"
-	if len(config.Accounts) > 0 {
+	if len(cfg.Accounts) > 0 {
 		modelDisplay = map[string]string{
 			"gemini-2.0-flash":      "🚀 Gemini 2.0 Flash",
 			"gemini-2.0-flash-lite": "⚡ Gemini 2.0 Flash-Lite",
 			"gemini-2.5-pro":        "🚀 Gemini 2.5 Pro",
 			"gemini-2.5-flash":      "⚡ Gemini 2.5 Flash",
 			"gemini-2.5-flash-lite": "💡 Gemini 2.5 Flash-Lite",
-		}[config.Accounts[0].Model]
+		}[cfg.Accounts[0].Model]
 	}
 
 	// Get account info
-	primaryAccount := GetPrimaryAccount(config)
+	primaryAccount := GetPrimaryAccount(cfg)
 	accountInfo := ""
 	if primaryAccount != nil {
 		email := primaryAccount.Email
@@ -64,29 +66,29 @@ func ShowCurrentConfig(config Config) {
 %s===================================================
 	`,
 		Colors["CYAN"],
-		CenterText(GetMessage("current_config", config), 51),
+		CenterText(messages.GetMessage("current_config", cfg), 51),
 		Colors["CYAN"],
-		Colors["YELLOW"], GetMessage("ui_lang", config), uiLangDisplay,
-		Colors["YELLOW"], GetMessage("commit_lang", config), commitLangDisplay,
-		Colors["YELLOW"], GetMessage("commit_style", config), styleDisplay,
+		Colors["YELLOW"], messages.GetMessage("ui_lang", cfg), uiLangDisplay,
+		Colors["YELLOW"], messages.GetMessage("commit_lang", cfg), commitLangDisplay,
+		Colors["YELLOW"], messages.GetMessage("commit_style", cfg), styleDisplay,
 		accountInfo,
-		Colors["YELLOW"], GetMessage("auto_push", config), GetStatusDisplay(config.AutoPush, config),
-		Colors["YELLOW"], GetMessage("auto_stage", config), GetStatusDisplay(config.AutoStage, config),
+		Colors["YELLOW"], messages.GetMessage("auto_push", cfg), GetStatusDisplay(cfg.AutoPush, cfg),
+		Colors["YELLOW"], messages.GetMessage("auto_stage", cfg), GetStatusDisplay(cfg.AutoStage, cfg),
 		Colors["CYAN"],
 	)
 }
 
-func GetStatusDisplay(enabled bool, config Config) string {
+func GetStatusDisplay(enabled bool, cfg config.Config) string {
 	if enabled {
-		return fmt.Sprintf("%s✅ %s", Colors["GREEN"], GetMessage("enabled", config))
+		return fmt.Sprintf("%s✅ %s", Colors["GREEN"], messages.GetMessage("enabled", config))
 	}
-	return fmt.Sprintf("%s❌ %s", Colors["RED"], GetMessage("disabled", config))
+	return fmt.Sprintf("%s❌ %s", Colors["RED"], messages.GetMessage("disabled", config))
 }
 
-func ShowSettingsMenu(config Config) {
+func ShowSettingsMenu(cfg config.Config) {
 	for {
-		PrintHeader(GetMessage("settings_menu", config))
-		ShowCurrentConfig(config)
+		PrintHeader(messages.GetMessage("settings_menu", cfg))
+		ShowCurrentConfig(cfg)
 
 		optionsText := fmt.Sprintf(`
 %s===================================================
@@ -100,18 +102,18 @@ func ShowSettingsMenu(config Config) {
 %s===================================================
 		`,
 			Colors["BLUE"],
-			CenterText(GetMessage("options", config), 51),
+			CenterText(messages.GetMessage("options", config), 51),
 			Colors["BLUE"],
-			Colors["GREEN"], Colors["END"], GetMessage("edit_config", config),
-			Colors["YELLOW"], Colors["END"], GetMessage("reset_defaults", config),
-			Colors["RED"], Colors["END"], GetMessage("uninstall_tool", config),
-			Colors["CYAN"], Colors["END"], GetMessage("help_info", config),
-			Colors["WHITE"], Colors["END"], GetMessage("exit", config),
+			Colors["GREEN"], Colors["END"], messages.GetMessage("edit_config", config),
+			Colors["YELLOW"], Colors["END"], messages.GetMessage("reset_defaults", config),
+			Colors["RED"], Colors["END"], messages.GetMessage("uninstall_tool", config),
+			Colors["CYAN"], Colors["END"], messages.GetMessage("help_info", config),
+			Colors["WHITE"], Colors["END"], messages.GetMessage("exit", config),
 			Colors["BLUE"],
 		)
 		fmt.Println(optionsText)
 
-		fmt.Printf("\n%s🎯 %s (0-4): %s", Colors["BOLD"], GetMessage("select_option", config), Colors["END"])
+		fmt.Printf("\n%s🎯 %s (0-4): %s", Colors["BOLD"], messages.GetMessage("select_option", config), Colors["END"])
 
 		reader := bufio.NewReader(os.Stdin)
 		choice, _ := reader.ReadString('\n')
@@ -122,29 +124,29 @@ func ShowSettingsMenu(config Config) {
 			config = ShowConfigurationInterface(config)
 			SaveConfig(config)
 		case "2":
-			if ConfirmAction(GetMessage("reset_confirm", config), config) {
+			if ConfirmAction(messages.GetMessage("reset_confirm", config), config) {
 				config = ResetConfig()
 			}
 		case "3":
-			if ConfirmAction(GetMessage("uninstall_confirm", config), config) {
+			if ConfirmAction(messages.GetMessage("uninstall_confirm", config), config) {
 				UninstallTool()
 				return
 			}
 		case "4":
 			ShowHelp(config)
 		case "0":
-			PrintSuccess("👋 " + GetMessage("exit", config))
+			PrintSuccess("👋 " + messages.GetMessage("exit", config))
 			return
 		default:
-			PrintError(GetMessage("invalid_option", config))
+			PrintError(messages.GetMessage("invalid_option", config))
 		}
 	}
 }
 
 func ShowConfigurationInterface(config Config) Config {
 	for {
-		PrintHeader("⚙️  " + GetMessage("edit_config", config))
-		ShowCurrentConfig(config)
+		PrintHeader("⚙️  " + messages.GetMessage("edit_config", config))
+		ShowCurrentConfig(cfg)
 
 		editOptions := fmt.Sprintf(`
 %s===================================================
@@ -161,21 +163,21 @@ func ShowConfigurationInterface(config Config) Config {
 %s===================================================
 		`,
 			Colors["BLUE"],
-			CenterText(GetMessage("edit_options", config), 51),
+			CenterText(messages.GetMessage("edit_options", config), 51),
 			Colors["BLUE"],
-			Colors["GREEN"], Colors["END"], GetMessage("change_ui_lang", config),
-			Colors["GREEN"], Colors["END"], GetMessage("change_commit_lang", config),
-			Colors["GREEN"], Colors["END"], GetMessage("update_api_key", config),
-			Colors["GREEN"], Colors["END"], GetMessage("change_ai_model", config),
-			Colors["GREEN"], Colors["END"], GetMessage("change_commit_style", config),
-			Colors["GREEN"], Colors["END"], GetMessage("toggle_auto_push", config),
-			Colors["CYAN"], Colors["END"], GetMessage("save_back", config),
-			Colors["WHITE"], Colors["END"], GetMessage("back_no_save", config),
+			Colors["GREEN"], Colors["END"], messages.GetMessage("change_ui_lang", config),
+			Colors["GREEN"], Colors["END"], messages.GetMessage("change_commit_lang", config),
+			Colors["GREEN"], Colors["END"], messages.GetMessage("update_api_key", config),
+			Colors["GREEN"], Colors["END"], messages.GetMessage("change_ai_model", config),
+			Colors["GREEN"], Colors["END"], messages.GetMessage("change_commit_style", config),
+			Colors["GREEN"], Colors["END"], messages.GetMessage("toggle_auto_push", config),
+			Colors["CYAN"], Colors["END"], messages.GetMessage("save_back", config),
+			Colors["WHITE"], Colors["END"], messages.GetMessage("back_no_save", config),
 			Colors["BLUE"],
 		)
 		fmt.Println(editOptions)
 
-		fmt.Printf("\n%s🎯 %s (0-7): %s", Colors["BOLD"], GetMessage("select_option", config), Colors["END"])
+		fmt.Printf("\n%s🎯 %s (0-7): %s", Colors["BOLD"], messages.GetMessage("select_option", config), Colors["END"])
 
 		reader := bufio.NewReader(os.Stdin)
 		choice, _ := reader.ReadString('\n')
@@ -196,30 +198,30 @@ func ShowConfigurationInterface(config Config) Config {
 			config = ToggleAutoPush(config)
 		case "7":
 			SaveConfig(config)
-			PrintSuccess(GetMessage("save_exit", config))
+			PrintSuccess(messages.GetMessage("save_exit", config))
 			return config
 		case "0":
 			return config
 		default:
-			PrintError(GetMessage("invalid_option", config))
+			PrintError(messages.GetMessage("invalid_option", config))
 		}
 	}
 }
 
 func ChangeUILanguage(config Config) Config {
-	PrintSection("🌐 " + GetMessage("change_ui_lang", config))
+	PrintSection("🌐 " + messages.GetMessage("change_ui_lang", config))
 	fmt.Printf(`
 %s%s:
 1️⃣  🇺🇸 %s
 2️⃣  🇻🇳 %s
 	`,
-		Colors["BLUE"], GetMessage("available_langs", config),
-		GetMessage("lang_1", config),
-		GetMessage("lang_2", config),
+		Colors["BLUE"], messages.GetMessage("available_langs", config),
+		messages.GetMessage("lang_1", config),
+		messages.GetMessage("lang_2", config),
 	)
 
 	for {
-		fmt.Printf("\n%s%s (1-2): %s", Colors["BOLD"], GetMessage("select_lang", config), Colors["END"])
+		fmt.Printf("\n%s%s (1-2): %s", Colors["BOLD"], messages.GetMessage("select_lang", config), Colors["END"])
 
 		reader := bufio.NewReader(os.Stdin)
 		choice, _ := reader.ReadString('\n')
@@ -242,7 +244,7 @@ func ChangeUILanguage(config Config) Config {
 			PrintSuccess("✅ " + successMsg)
 			break
 		} else {
-			PrintError(GetMessage("invalid_choice", config))
+			PrintError(messages.GetMessage("invalid_choice", config))
 		}
 	}
 
@@ -250,19 +252,19 @@ func ChangeUILanguage(config Config) Config {
 }
 
 func ChangeCommitLanguage(config Config) Config {
-	PrintSection("💬 " + GetMessage("change_commit_lang", config))
+	PrintSection("💬 " + messages.GetMessage("change_commit_lang", config))
 	fmt.Printf(`
 %s%s:
 1️⃣  🇺🇸 %s (feat: add user authentication)
 2️⃣  🇻🇳 %s (feat: thêm xác thực người dùng)
 	`,
-		Colors["BLUE"], GetMessage("available_langs", config),
-		GetMessage("lang_1", config),
-		GetMessage("lang_2", config),
+		Colors["BLUE"], messages.GetMessage("available_langs", config),
+		messages.GetMessage("lang_1", config),
+		messages.GetMessage("lang_2", config),
 	)
 
 	for {
-		fmt.Printf("\n%s%s (1-2): %s", Colors["BOLD"], GetMessage("select_lang", config), Colors["END"])
+		fmt.Printf("\n%s%s (1-2): %s", Colors["BOLD"], messages.GetMessage("select_lang", config), Colors["END"])
 
 		reader := bufio.NewReader(os.Stdin)
 		choice, _ := reader.ReadString('\n')
@@ -285,7 +287,7 @@ func ChangeCommitLanguage(config Config) Config {
 			PrintSuccess("✅ " + successMsg)
 			break
 		} else {
-			PrintError(GetMessage("invalid_choice", config))
+			PrintError(messages.GetMessage("invalid_choice", config))
 		}
 	}
 
@@ -293,7 +295,7 @@ func ChangeCommitLanguage(config Config) Config {
 }
 
 func UpdateAPIKey(config Config) Config {
-	PrintSection("🔑 " + GetMessage("update_api_key", config))
+	PrintSection("🔑 " + messages.GetMessage("update_api_key", config))
 
 	// Get primary account
 	primaryAccount := GetPrimaryAccount(config)
@@ -309,7 +311,7 @@ func UpdateAPIKey(config Config) Config {
 		}
 	}
 
-	fmt.Printf("\n%s%s: %s", Colors["BOLD"], GetMessage("enter_api_key_prompt", config), Colors["END"])
+	fmt.Printf("\n%s%s: %s", Colors["BOLD"], messages.GetMessage("enter_api_key_prompt", config), Colors["END"])
 
 	reader := bufio.NewReader(os.Stdin)
 	newKey, _ := reader.ReadString('\n')
@@ -349,7 +351,7 @@ func UpdateAPIKey(config Config) Config {
 }
 
 func ChangeAIModel(config Config) Config {
-	PrintSection("🤖 " + GetMessage("change_ai_model", config))
+	PrintSection("🤖 " + messages.GetMessage("change_ai_model", config))
 	fmt.Printf(`
 %s%s:
 1️⃣  🚀 Gemini 2.5 Pro - %sRecommended%s (Best quality)
@@ -357,7 +359,7 @@ func ChangeAIModel(config Config) Config {
 3️⃣  💡 Gemini 2.5 Flash-Lite - %sEfficient%s (Lightweight)
 4️⃣  🚀 Gemini 2.0 Flash - %sLegacy%s (Compatible)
 	`,
-		Colors["BLUE"], GetMessage("available_models", config),
+		Colors["BLUE"], messages.GetMessage("available_models", config),
 		Colors["GREEN"], Colors["END"],
 		Colors["YELLOW"], Colors["END"],
 		Colors["BLUE"], Colors["END"],
@@ -382,7 +384,7 @@ func ChangeAIModel(config Config) Config {
 	fmt.Printf("Current selection: %s\n", currentChoice)
 
 	for {
-		fmt.Printf("%s%s (1-4): %s", Colors["BOLD"], GetMessage("select_model", config), Colors["END"])
+		fmt.Printf("%s%s (1-4): %s", Colors["BOLD"], messages.GetMessage("select_model", config), Colors["END"])
 
 		reader := bufio.NewReader(os.Stdin)
 		choice, _ := reader.ReadString('\n')
@@ -414,7 +416,7 @@ func ChangeAIModel(config Config) Config {
 			PrintSuccess(successMsgs[choice])
 			break
 		} else {
-			PrintError(GetMessage("invalid_choice", config))
+			PrintError(messages.GetMessage("invalid_choice", config))
 		}
 	}
 
@@ -422,7 +424,7 @@ func ChangeAIModel(config Config) Config {
 }
 
 func ChangeCommitStyle(config Config) Config {
-	PrintSection("🎨 " + GetMessage("change_commit_style", config))
+	PrintSection("🎨 " + messages.GetMessage("change_commit_style", config))
 	fmt.Printf(`
 %s%s:
 
@@ -435,7 +437,7 @@ func ChangeCommitStyle(config Config) Config {
 3️⃣  📝 %sDescriptive%s
     Example: %sAdd comprehensive user authentication system%s
 	`,
-		Colors["BLUE"], GetMessage("available_styles", config),
+		Colors["BLUE"], messages.GetMessage("available_styles", config),
 		Colors["BOLD"], Colors["END"], Colors["GREEN"], Colors["END"],
 		Colors["BOLD"], Colors["END"], Colors["GREEN"], Colors["END"],
 		Colors["BOLD"], Colors["END"], Colors["GREEN"], Colors["END"],
@@ -446,7 +448,7 @@ func ChangeCommitStyle(config Config) Config {
 	fmt.Printf("Current selection: %s\n", styleMap[currentStyle])
 
 	for {
-		fmt.Printf("%s%s (1-3): %s", Colors["BOLD"], GetMessage("select_style", config), Colors["END"])
+		fmt.Printf("%s%s (1-3): %s", Colors["BOLD"], messages.GetMessage("select_style", config), Colors["END"])
 
 		reader := bufio.NewReader(os.Stdin)
 		choice, _ := reader.ReadString('\n')
@@ -477,7 +479,7 @@ func ChangeCommitStyle(config Config) Config {
 			PrintSuccess("📝 " + successMsg)
 			break
 		} else {
-			PrintError(GetMessage("invalid_choice", config))
+			PrintError(messages.GetMessage("invalid_choice", config))
 		}
 	}
 
@@ -485,22 +487,22 @@ func ChangeCommitStyle(config Config) Config {
 }
 
 func ToggleAutoPush(config Config) Config {
-	PrintSection("🚀 " + GetMessage("toggle_auto_push", config))
+	PrintSection("🚀 " + messages.GetMessage("toggle_auto_push", config))
 
 	currentStatus := config.AutoPush
-	statusText := GetMessage("enabled", config)
+	statusText := messages.GetMessage("enabled", config)
 	if !currentStatus {
-		statusText = GetMessage("disabled", config)
+		statusText = messages.GetMessage("disabled", config)
 	}
 	newStatus := !currentStatus
-	actionText := GetMessage("enable", config)
+	actionText := messages.GetMessage("enable", config)
 	if !newStatus {
-		actionText = GetMessage("disable", config)
+		actionText = messages.GetMessage("disable", config)
 	}
 
-	fmt.Printf("%s %s %s%s%s\n", GetMessage("auto_push", config), GetMessage("is_currently", config), Colors["BOLD"], statusText, Colors["END"])
+	fmt.Printf("%s %s %s%s%s\n", messages.GetMessage("auto_push", config), messages.GetMessage("is_currently", config), Colors["BOLD"], statusText, Colors["END"])
 
-	fmt.Printf("%s %s %s? (y/N): ", GetMessage("confirm_toggle", config), Colors["BOLD"], actionText)
+	fmt.Printf("%s %s %s? (y/N): ", messages.GetMessage("confirm_toggle", config), Colors["BOLD"], actionText)
 
 	reader := bufio.NewReader(os.Stdin)
 	confirm, _ := reader.ReadString('\n')
@@ -512,11 +514,11 @@ func ToggleAutoPush(config Config) Config {
 		if !newStatus {
 			emoji = "❌"
 		}
-		status := GetMessage("enabled", config)
+		status := messages.GetMessage("enabled", config)
 		if !newStatus {
-			status = GetMessage("disabled", config)
+			status = messages.GetMessage("disabled", config)
 		}
-		PrintSuccess(fmt.Sprintf("%s %s %s!", emoji, GetMessage("auto_push", config), status))
+		PrintSuccess(fmt.Sprintf("%s %s %s!", emoji, messages.GetMessage("auto_push", config), status))
 	} else {
 		infoMsg := "Auto push setting unchanged."
 		if config.UILanguage == "vi" {
@@ -529,10 +531,10 @@ func ToggleAutoPush(config Config) Config {
 }
 
 func ShowHelp(config Config) {
-	PrintHeader("❓ " + GetMessage("help_info", config))
-	fmt.Println(GetMessage("help_text", config))
+	PrintHeader("❓ " + messages.GetMessage("help_info", config))
+	fmt.Println(messages.GetMessage("help_text", config))
 
-	fmt.Printf("\n%s%s...%s", Colors["DIM"], GetMessage("press_enter_continue", config), Colors["END"])
+	fmt.Printf("\n%s%s...%s", Colors["DIM"], messages.GetMessage("press_enter_continue", config), Colors["END"])
 
 	reader := bufio.NewReader(os.Stdin)
 	reader.ReadString('\n')
@@ -540,7 +542,7 @@ func ShowHelp(config Config) {
 
 func ConfirmAction(message string, config Config) bool {
 	PrintWarning(message)
-	fmt.Print(GetMessage("type_yes_confirm", config))
+	fmt.Print(messages.GetMessage("type_yes_confirm", config))
 
 	reader := bufio.NewReader(os.Stdin)
 	confirm, _ := reader.ReadString('\n')

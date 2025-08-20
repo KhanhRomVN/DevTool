@@ -1,5 +1,4 @@
-// config/config.go
-package main
+package config
 
 import (
 	"encoding/json"
@@ -283,7 +282,7 @@ func UninstallTool() {
 	}
 
 	fmt.Println("✅ dev_tool has been uninstalled successfully!")
-	fmt.Println("To reinstall, run: go install github.com/your-repo/dev_tool")
+	fmt.Println("To reinstall, run: go install github.com/KhanhRomVN/dev_tool")
 }
 
 func GetPrimaryAccount(config Config) *Account {

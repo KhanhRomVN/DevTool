@@ -1,10 +1,12 @@
 // git/git.go
-package main
+package git
 
 import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"dev_tool/config"
 )
 
 func GetGitDiff() (string, error) {
@@ -21,15 +23,15 @@ func StageAllChanges() error {
 	return cmd.Run()
 }
 
-func CommitChanges(commitMessage string, config Config) error {
+func CommitChanges(commitMessage string, cfg config.Config) error {
 	// Format the message based on style
-	formattedMessage := FormatCommitMessage(commitMessage, config.CommitStyle)
+	formattedMessage := FormatCommitMessage(commitMessage, cfg.CommitStyle)
 
 	cmd := exec.Command("git", "commit", "-m", formattedMessage)
 	return cmd.Run()
 }
 
-func PushChanges(config Config) error {
+func PushChanges(config config.Config) error {
 	cmd := exec.Command("git", "push")
 	return cmd.Run()
 }
@@ -82,7 +84,7 @@ func FormatCommitMessage(message string, style string) string {
 				// Add generic emoji if no type detected
 				lines[0] = fmt.Sprintf("📝 %s", title)
 			}
-		}undefined: GetConfigDir
+		}
 	}
 
 	// Clean up any backticks from bullet points

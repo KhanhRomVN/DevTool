@@ -1,7 +1,7 @@
-// messages/messages.go
-package main
+package messages
 
 import (
+	"dev_tool/config"
 	"fmt"
 	"strings"
 
@@ -194,8 +194,8 @@ var Messages = map[string]map[string]string{
 	},
 }
 
-func GetMessage(key string, config Config) string {
-	lang := config.UILanguage
+func GetMessage(key string, cfg config.Config) string {
+	lang := cfg.UILanguage
 	if lang == "" {
 		lang = "en"
 	}

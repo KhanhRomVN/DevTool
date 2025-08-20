@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"dev_tool/config"
+
 	"github.com/spf13/cobra"
 )
 
@@ -44,8 +46,8 @@ func newAutoCommitCmd() *cobra.Command {
 		Use:   "auto-commit",
 		Short: "Generate and commit with AI message",
 		Run: func(cmd *cobra.Command, args []string) {
-			config := LoadConfig()
-			HandleAutoCommit(noPush, config)
+			cfg := config.LoadConfig()
+			HandleAutoCommit(noPush, cfg)
 		},
 	}
 
@@ -58,8 +60,8 @@ func newSettingsCmd() *cobra.Command {
 		Use:   "settings",
 		Short: "Open settings menu",
 		Run: func(cmd *cobra.Command, args []string) {
-			config := LoadConfig()
-			ShowSettingsMenu(config)
+			cfg := config.LoadConfig()
+			ShowSettingsMenu(cfg)
 		},
 	}
 }
