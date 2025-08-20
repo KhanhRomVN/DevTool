@@ -220,7 +220,8 @@ func ShowConfigurationInterface(cfg config.Config) config.Config {
 %s4%s │ 🤖 %s
 %s5%s │ 🎨 %s
 %s6%s │ 🚀 %s
-%s7%s │ 💾 %s
+%s7%s │ 📦 %s
+%s8%s │ 💾 %s
 %s0%s │ ⬅️  %s
 %s===================================================
 		`,
@@ -233,13 +234,14 @@ func ShowConfigurationInterface(cfg config.Config) config.Config {
 			Colors["GREEN"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("change_ai_model", cfg),
 			Colors["GREEN"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("change_commit_style", cfg),
 			Colors["GREEN"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("toggle_auto_push", cfg),
+			Colors["GREEN"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("toggle_auto_stage", cfg),
 			Colors["CYAN"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("save_back", cfg),
 			Colors["WHITE"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("back_no_save", cfg),
 			Colors["BLUE"].Sprint(""),
 		)
 		fmt.Println(editOptions)
 
-		fmt.Printf("\n%s🎯 %s (0-7): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_option", cfg), Colors["END"].Sprint(""))
+		fmt.Printf("\n%s🎯 %s (0-8): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_option", cfg), Colors["END"].Sprint(""))
 
 		reader := bufio.NewReader(os.Stdin)
 		choice, _ := reader.ReadString('\n')
@@ -259,6 +261,8 @@ func ShowConfigurationInterface(cfg config.Config) config.Config {
 		case "6":
 			cfg = ToggleAutoPush(cfg)
 		case "7":
+			cfg = ToggleAutoStage(cfg)
+		case "8":
 			config.SaveConfig(cfg)
 			messages.PrintSuccess(messages.GetMessage("save_exit", cfg))
 			return cfg
@@ -585,6 +589,50 @@ func ToggleAutoPush(cfg config.Config) config.Config {
 		infoMsg := "Auto push setting unchanged."
 		if cfg.UILanguage == "vi" {
 			infoMsg = "Cài đặt auto push không thay đổi."
+		}
+		messages.PrintInfo("ℹ️  " + infoMsg)
+	}
+
+	return cfg
+}
+
+func ToggleAutoStage(cfg config.Config) config.Config {
+	messages.PrintSection("📦 "+messages.GetMessage("toggle_auto_stage", cfg), "BLUE")
+
+	currentStatus := cfg.AutoStage
+	statusText := messages.GetMessage("enabled", cfg)
+	if !currentStatus {
+		statusText = messages.GetMessage("disabled", cfg)
+	}
+	newStatus := !currentStatus
+	actionText := messages.GetMessage("enable", cfg)
+	if !newStatus {
+		actionText = messages.GetMessage("disable", cfg)
+	}
+
+	fmt.Printf("%s is currently %s%s%s\n", messages.GetMessage("auto_stage", cfg), Colors["BOLD"].Sprint(""), statusText, Colors["END"].Sprint(""))
+
+	fmt.Printf("%s %s %s? (y/N): ", messages.GetMessage("confirm_toggle", cfg), Colors["BOLD"].Sprint(""), actionText)
+
+	reader := bufio.NewReader(os.Stdin)
+	confirm, _ := reader.ReadString('\n')
+	confirm = strings.TrimSpace(strings.ToLower(confirm))
+
+	if confirm == "y" || confirm == "yes" || confirm == "có" {
+		cfg.AutoStage = newStatus
+		emoji := "✅"
+		if !newStatus {
+			emoji = "❌"
+		}
+		status := messages.GetMessage("enabled", cfg)
+		if !newStatus {
+			status = messages.GetMessage("disabled", cfg)
+		}
+		messages.PrintSuccess(fmt.Sprintf("%s %s %s!", emoji, messages.GetMessage("auto_stage", cfg), status))
+	} else {
+		infoMsg := "Auto stage setting unchanged."
+		if cfg.UILanguage == "vi" {
+			infoMsg = "Cài đặt auto stage không thay đổi."
 		}
 		messages.PrintInfo("ℹ️  " + infoMsg)
 	}
