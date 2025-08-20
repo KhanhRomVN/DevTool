@@ -1,0 +1,30 @@
+name: dev-tool
+version: '2.0.1'
+summary: AI-powered Git Commit Message Generator
+description: |
+  Dev Tool is an AI-powered Git commit message generator that helps developers
+  write meaningful commit messages using AI.
+
+grade: stable
+confinement: strict
+base: core20
+
+apps:
+  dev-tool:
+    command: bin/dev_tool
+    plugs: [home, network, network-bind]
+    environment:
+      PATH: $SNAP/usr/bin:$PATH
+
+parts:
+  dev-tool:
+    plugin: dump
+    source: build/linux/
+    organize:
+      dev_tool_v2.0.1: bin/dev_tool
+    stage-packages: [git]
+
+  go-runtime:
+    plugin: go
+    go-channel: "1.21/stable"
+    stage-packages: [git]
