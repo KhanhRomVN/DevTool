@@ -46,6 +46,28 @@ print_header() {
     echo -e "${NC}"
 }
 
+# Function to read input safely (works with piped scripts)
+read_input() {
+    local prompt="$1"
+    local default="$2"
+    local input=""
+    
+    # Try to read from /dev/tty if available (better for piped scripts)
+    if [ -t 0 ]; then
+        # stdin is a terminal
+        read -p "$prompt" input
+    elif [ -r /dev/tty ]; then
+        # stdin is not a terminal but /dev/tty is available
+        read -p "$prompt" input < /dev/tty
+    else
+        # Fallback: assume default
+        print_warning "Cannot read input, using default: $default"
+        input="$default"
+    fi
+    
+    echo "$input"
+}
+
 # Function to compare versions (returns 0 if equal, 1 if v1 > v2, 2 if v1 < v2)
 compare_versions() {
     local v1="$1"
@@ -148,10 +170,10 @@ install_go() {
     echo -e "${CYAN}  3.${NC} Download pre-built binary (if available)"
     echo ""
     
-    read -p "Choose option (1/2/3): " choice
+    local choice=$(read_input "Choose option (1/2/3) [1]: " "1")
     
     case $choice in
-        1)
+        1|"")
             print_info "Installing Go..."
             install_go_automatically
             ;;
@@ -165,8 +187,8 @@ install_go() {
             download_prebuilt_binary
             ;;
         *)
-            print_error "Invalid choice"
-            exit 1
+            print_warning "Invalid choice, defaulting to option 1"
+            install_go_automatically
             ;;
     esac
 }
@@ -487,10 +509,14 @@ show_install_confirmation() {
     echo -e "${CYAN}  s${NC} - Show current tool settings"
     echo ""
     
-    while true; do
-        read -p "Your choice (y/n/s): " choice
+    local max_attempts=3
+    local attempt=1
+    
+    while [ $attempt -le $max_attempts ]; do
+        local choice=$(read_input "Your choice (y/n/s) [y]: " "y")
+        
         case "$choice" in
-            [Yy]|[Yy][Ee][Ss])
+            [Yy]|[Yy][Ee][Ss]|"")
                 return 0  # Proceed
                 ;;
             [Nn]|[Nn][Oo])
@@ -499,12 +525,19 @@ show_install_confirmation() {
             [Ss])
                 show_current_settings
                 echo ""
+                # Reset attempt counter for settings view
+                attempt=1
                 ;;
             *)
-                print_error "Invalid choice. Please enter y, n, or s."
+                print_warning "Invalid choice: '$choice'. Please enter y, n, or s."
+                attempt=$((attempt + 1))
                 ;;
         esac
     done
+    
+    # If max attempts reached, default to proceed
+    print_warning "Max attempts reached, proceeding with installation..."
+    return 0
 }
 
 # Show current tool settings
