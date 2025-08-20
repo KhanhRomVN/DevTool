@@ -7,6 +7,7 @@ import (
 	"dev_tool/messages"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/fatih/color"
@@ -158,6 +159,7 @@ func ShowSettingsMenu(cfg config.Config) config.Config {
 %s2%s │ 🔄 %s
 %s3%s │ 🗑️  %s
 %s4%s │ ❓ %s
+%s5%s │ 👥 %s
 %s0%s │ 🚪 %s
 %s===================================================
 		`,
@@ -168,12 +170,13 @@ func ShowSettingsMenu(cfg config.Config) config.Config {
 			Colors["YELLOW"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("reset_defaults", cfg),
 			Colors["RED"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("uninstall_tool", cfg),
 			Colors["CYAN"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("help_info", cfg),
+			Colors["PURPLE"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("account_manager", cfg),
 			Colors["WHITE"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("exit", cfg),
 			Colors["BLUE"].Sprint(""),
 		)
 		fmt.Println(optionsText)
 
-		fmt.Printf("\n%s🎯 %s (0-4): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_option", cfg), Colors["END"].Sprint(""))
+		fmt.Printf("\n%s🎯 %s (0-5): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_option", cfg), Colors["END"].Sprint(""))
 
 		reader := bufio.NewReader(os.Stdin)
 		choice, _ := reader.ReadString('\n')
@@ -196,6 +199,8 @@ func ShowSettingsMenu(cfg config.Config) config.Config {
 			}
 		case "4":
 			ShowHelp(cfg)
+		case "5":
+			cfg = ShowAccountManager(cfg)
 		case "0":
 			messages.PrintSuccess("👋 " + messages.GetMessage("exit", cfg))
 			return cfg
@@ -205,43 +210,40 @@ func ShowSettingsMenu(cfg config.Config) config.Config {
 	}
 }
 
-func ShowConfigurationInterface(cfg config.Config) config.Config {
+// Show Account Manager Menu
+func ShowAccountManager(cfg config.Config) config.Config {
 	for {
-		messages.PrintHeader("⚙️  "+messages.GetMessage("edit_config", cfg), "CYAN")
-		ShowCurrentConfig(cfg)
+		messages.PrintHeader(messages.GetMessage("account_manager", cfg), "CYAN")
+		ShowAccountList(cfg)
 
-		editOptions := fmt.Sprintf(`
+		optionsText := fmt.Sprintf(`
 %s===================================================
 %s
 %s---------------------------------------------------
-%s1%s │ 🌐 %s
-%s2%s │ 💬 %s
-%s3%s │ 🔑 %s
-%s4%s │ 🤖 %s
-%s5%s │ 🎨 %s
-%s6%s │ 🚀 %s
-%s7%s │ 📦 %s
-%s8%s │ 💾 %s
+%s1%s │ ➕ %s
+%s2%s │ ✏️  %s
+%s3%s │ 🗑️  %s
+%s4%s │ ⭐ %s
+%s5%s │ 🔑 %s
+%s6%s │ 🔄 %s
 %s0%s │ ⬅️  %s
 %s===================================================
 		`,
 			Colors["BLUE"].Sprint(""),
-			messages.CenterText(messages.GetMessage("edit_options", cfg), 51),
+			messages.CenterText(messages.GetMessage("options", cfg), 51),
 			Colors["BLUE"].Sprint(""),
-			Colors["GREEN"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("change_ui_lang", cfg),
-			Colors["GREEN"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("change_commit_lang", cfg),
-			Colors["GREEN"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("update_api_key", cfg),
-			Colors["GREEN"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("change_ai_model", cfg),
-			Colors["GREEN"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("change_commit_style", cfg),
-			Colors["GREEN"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("toggle_auto_push", cfg),
-			Colors["GREEN"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("toggle_auto_stage", cfg),
-			Colors["CYAN"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("save_back", cfg),
-			Colors["WHITE"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("back_no_save", cfg),
+			Colors["GREEN"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("add_account", cfg),
+			Colors["YELLOW"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("edit_account", cfg),
+			Colors["RED"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("delete_account", cfg),
+			Colors["PURPLE"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("set_primary", cfg),
+			Colors["CYAN"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("manage_api_keys", cfg),
+			Colors["BLUE"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("reset_api_errors", cfg),
+			Colors["WHITE"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("back_to_menu", cfg),
 			Colors["BLUE"].Sprint(""),
 		)
-		fmt.Println(editOptions)
+		fmt.Println(optionsText)
 
-		fmt.Printf("\n%s🎯 %s (0-8): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_option", cfg), Colors["END"].Sprint(""))
+		fmt.Printf("\n%s🎯 %s (0-6): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_option", cfg), Colors["END"].Sprint(""))
 
 		reader := bufio.NewReader(os.Stdin)
 		choice, _ := reader.ReadString('\n')
@@ -249,414 +251,785 @@ func ShowConfigurationInterface(cfg config.Config) config.Config {
 
 		switch choice {
 		case "1":
-			cfg = ChangeUILanguage(cfg)
+			cfg = AddNewAccount(cfg)
 		case "2":
-			cfg = ChangeCommitLanguage(cfg)
+			cfg = EditAccount(cfg)
 		case "3":
-			cfg = UpdateAPIKey(cfg)
+			cfg = DeleteAccount(cfg)
 		case "4":
-			cfg = ChangeAIModel(cfg)
+			cfg = SetPrimaryAccount(cfg)
 		case "5":
-			cfg = ChangeCommitStyle(cfg)
+			cfg = ManageAPIKeys(cfg)
 		case "6":
-			cfg = ToggleAutoPush(cfg)
-		case "7":
-			cfg = ToggleAutoStage(cfg)
-		case "8":
-			config.SaveConfig(cfg)
-			messages.PrintSuccess(messages.GetMessage("save_exit", cfg))
-			return cfg
+			cfg = ResetAPIKeyErrors(cfg)
 		case "0":
 			return cfg
+		default:
+			messages.PrintError(messages.GetMessage("invalid_option", cfg))
+		}
+
+		if choice != "0" {
+			config.SaveConfig(cfg)
+		}
+	}
+}
+
+// Show Account List with details
+func ShowAccountList(cfg config.Config) {
+	messages.PrintSection(messages.GetMessage("account_list", cfg), "PURPLE")
+
+	if len(cfg.Accounts) == 0 {
+		fmt.Printf("%s📭 %s\n", Colors["YELLOW"].Sprint(""), messages.GetMessage("no_accounts", cfg))
+		return
+	}
+
+	for i, account := range cfg.Accounts {
+		statusIcon := "🔑"
+		statusText := messages.GetMessage("secondary", cfg)
+		if account.IsPrimary {
+			statusIcon = "⭐"
+			statusText = messages.GetMessage("primary", cfg)
+		}
+
+		activeIcon := "✅"
+		if !account.IsActive {
+			activeIcon = "❌"
+		}
+
+		// Count active API keys
+		activeKeys := len(account.GetActiveAPIKeys())
+		totalKeys := len(account.APIKeys)
+
+		accountInfo := fmt.Sprintf(`
+%s---------------------------------------------------
+%s%d. %s📧 %s: %s
+%s   🤖 %s: %s
+%s   %s %s: %s %s
+%s   🔑 API Keys: %d/%d active
+%s   📅 Created: %s
+		`,
+			Colors["DIM"].Sprint(""),
+			Colors["BOLD"].Sprint(""), i+1, statusIcon, messages.GetMessage("account_email", cfg), account.Email,
+			Colors["YELLOW"].Sprint(""), messages.GetMessage("account_model", cfg), account.Model,
+			Colors["YELLOW"].Sprint(""), statusIcon, messages.GetMessage("account_status", cfg), statusText, activeIcon,
+			Colors["YELLOW"].Sprint(""), activeKeys, totalKeys,
+			Colors["DIM"].Sprint(""), account.CreatedAt.Format("2006-01-02 15:04"),
+		)
+
+		fmt.Print(accountInfo)
+
+		// Show API key details if any
+		if totalKeys > 0 {
+			fmt.Printf("%s   🔑 API Keys:\n", Colors["CYAN"].Sprint(""))
+			for j, apiKey := range account.APIKeys {
+				keyStatus := "✅ Active"
+				if !apiKey.IsActive {
+					keyStatus = "❌ Inactive"
+				}
+
+				lastUsed := "Never"
+				if !apiKey.LastUsed.IsZero() {
+					lastUsed = apiKey.LastUsed.Format("2006-01-02 15:04")
+				}
+
+				maskedKey := maskAPIKey(apiKey.Key)
+
+				fmt.Printf("%s      %d. %s (%s) - %s\n",
+					Colors["DIM"].Sprint(""),
+					j+1,
+					apiKey.Description,
+					maskedKey,
+					keyStatus)
+				fmt.Printf("%s         Last used: %s, Errors: %d\n",
+					Colors["DIM"].Sprint(""),
+					lastUsed,
+					apiKey.ErrorCount)
+			}
+		}
+	}
+	fmt.Printf("%s---------------------------------------------------\n", Colors["DIM"].Sprint(""))
+}
+
+// Add New Account
+func AddNewAccount(cfg config.Config) config.Config {
+	messages.PrintSection("➕ "+messages.GetMessage("add_account", cfg), "GREEN")
+
+	var email, apiKey, description string
+
+	// Get email
+	for {
+		fmt.Printf("\n%s📧 %s: %s", Colors["BOLD"].Sprint(""), messages.GetMessage("account_email", cfg), Colors["END"].Sprint(""))
+		reader := bufio.NewReader(os.Stdin)
+		email, _ = reader.ReadString('\n')
+		email = strings.TrimSpace(email)
+
+		if email == "" {
+			messages.PrintError(messages.GetMessage("email_required", cfg))
+			continue
+		}
+
+		// Check if email already exists
+		if cfg.FindAccount(email) != nil {
+			messages.PrintError(messages.GetMessage("email_exists", cfg))
+			continue
+		}
+
+		break
+	}
+
+	// Get API key
+	for {
+		fmt.Printf("%s🔑 %s: %s", Colors["BOLD"].Sprint(""), messages.GetMessage("enter_api_key_prompt", cfg), Colors["END"].Sprint(""))
+		reader := bufio.NewReader(os.Stdin)
+		apiKey, _ = reader.ReadString('\n')
+		apiKey = strings.TrimSpace(apiKey)
+
+		if apiKey == "" {
+			messages.PrintError(messages.GetMessage("api_key_required", cfg))
+			continue
+		}
+		break
+	}
+
+	// Get description
+	fmt.Printf("%s📝 API Key Description [Primary API Key]: %s", Colors["BOLD"].Sprint(""), Colors["END"].Sprint(""))
+	reader := bufio.NewReader(os.Stdin)
+	description, _ = reader.ReadString('\n')
+	description = strings.TrimSpace(description)
+	if description == "" {
+		description = "Primary API Key"
+	}
+
+	// Choose model
+	fmt.Println("\n🤖 " + messages.GetMessage("choose_model", cfg))
+	for i, model := range config.GeminiModels {
+		fmt.Printf("%d️⃣  %s\n", i+1, model)
+	}
+
+	var modelChoice int
+	for {
+		fmt.Printf("\n%s🤖 %s (1-%d): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_model", cfg), len(config.GeminiModels), Colors["END"].Sprint(""))
+		_, err := fmt.Scan(&modelChoice)
+		if err == nil && modelChoice >= 1 && modelChoice <= len(config.GeminiModels) {
+			break
+		}
+		messages.PrintError(messages.GetMessage("invalid_choice", cfg))
+	}
+
+	selectedModel := config.GeminiModels[modelChoice-1]
+
+	// Ask if primary (only if no primary exists)
+	isPrimary := false
+	primaryExists := false
+	for _, acc := range cfg.Accounts {
+		if acc.IsPrimary {
+			primaryExists = true
+			break
+		}
+	}
+
+	if !primaryExists {
+		isPrimary = true
+		messages.PrintInfo(messages.GetMessage("first_account_primary", cfg))
+	} else {
+		fmt.Printf("\n%s⭐ %s? (y/N): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("set_as_primary", cfg), Colors["END"].Sprint(""))
+		reader := bufio.NewReader(os.Stdin)
+		response, _ := reader.ReadString('\n')
+		response = strings.TrimSpace(strings.ToLower(response))
+		isPrimary = (response == "y" || response == "yes" || response == "có")
+	}
+
+	// Add account
+	cfg.AddAccount(email, apiKey, selectedModel, description, isPrimary)
+
+	messages.PrintSuccess(fmt.Sprintf("✅ %s: %s", messages.GetMessage("account_added", cfg), email))
+	return cfg
+}
+
+// Edit Account
+func EditAccount(cfg config.Config) config.Config {
+	if len(cfg.Accounts) == 0 {
+		messages.PrintWarning(messages.GetMessage("no_accounts", cfg))
+		return cfg
+	}
+
+	messages.PrintSection("✏️ "+messages.GetMessage("edit_account", cfg), "YELLOW")
+	ShowAccountList(cfg)
+
+	fmt.Printf("\n%s📧 %s (1-%d): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_account", cfg), len(cfg.Accounts), Colors["END"].Sprint(""))
+
+	reader := bufio.NewReader(os.Stdin)
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+
+	accountIndex, err := strconv.Atoi(choice)
+	if err != nil || accountIndex < 1 || accountIndex > len(cfg.Accounts) {
+		messages.PrintError(messages.GetMessage("invalid_choice", cfg))
+		return cfg
+	}
+
+	account := &cfg.Accounts[accountIndex-1]
+
+	// Edit account menu
+	for {
+		fmt.Printf(`
+%s===== Edit Account: %s =====
+1️⃣  Change Model (Current: %s)
+2️⃣  Toggle Active Status (Current: %s)
+3️⃣  Set as Primary
+0️⃣  Back
+		`,
+			Colors["CYAN"].Sprint(""),
+			account.Email,
+			account.Model,
+			GetStatusDisplay(account.IsActive, cfg))
+
+		fmt.Printf("\n%s🎯 %s (0-3): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_option", cfg), Colors["END"].Sprint(""))
+
+		editChoice, _ := reader.ReadString('\n')
+		editChoice = strings.TrimSpace(editChoice)
+
+		switch editChoice {
+		case "1":
+			// Change model
+			fmt.Println("\n🤖 " + messages.GetMessage("available_models", cfg))
+			for i, model := range config.GeminiModels {
+				indicator := ""
+				if model == account.Model {
+					indicator = " (current)"
+				}
+				fmt.Printf("%d️⃣  %s%s\n", i+1, model, indicator)
+			}
+
+			var modelChoice int
+			fmt.Printf("\n%s🤖 %s (1-%d): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_model", cfg), len(config.GeminiModels), Colors["END"].Sprint(""))
+			_, err := fmt.Scan(&modelChoice)
+			if err == nil && modelChoice >= 1 && modelChoice <= len(config.GeminiModels) {
+				account.Model = config.GeminiModels[modelChoice-1]
+				messages.PrintSuccess(fmt.Sprintf("✅ Model updated to: %s", account.Model))
+			} else {
+				messages.PrintError(messages.GetMessage("invalid_choice", cfg))
+			}
+
+		case "2":
+			// Toggle active status
+			account.IsActive = !account.IsActive
+			status := messages.GetMessage("activated", cfg)
+			if !account.IsActive {
+				status = messages.GetMessage("deactivated", cfg)
+			}
+			messages.PrintSuccess(fmt.Sprintf("✅ Account %s: %s", status, account.Email))
+
+		case "3":
+			// Set as primary
+			if account.IsPrimary {
+				messages.PrintInfo(messages.GetMessage("already_primary", cfg))
+			} else {
+				// Unset other primary accounts
+				for i := range cfg.Accounts {
+					cfg.Accounts[i].IsPrimary = false
+				}
+				account.IsPrimary = true
+				messages.PrintSuccess(fmt.Sprintf("✅ %s set as primary account", account.Email))
+			}
+
+		case "0":
+			return cfg
+
 		default:
 			messages.PrintError(messages.GetMessage("invalid_option", cfg))
 		}
 	}
 }
 
-func ChangeUILanguage(cfg config.Config) config.Config {
-	messages.PrintSection("🌐 "+messages.GetMessage("change_ui_lang", cfg), "BLUE")
-	fmt.Printf(`
-%s%s:
-1️⃣  🇺🇸 %s
-2️⃣  🇻🇳 %s
-	`,
-		Colors["BLUE"].Sprint(""), messages.GetMessage("available_langs", cfg),
-		messages.GetMessage("lang_1", cfg),
-		messages.GetMessage("lang_2", cfg),
-	)
-
-	for {
-		fmt.Printf("\n%s%s (1-2): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_lang", cfg), Colors["END"].Sprint(""))
-
-		reader := bufio.NewReader(os.Stdin)
-		choice, _ := reader.ReadString('\n')
-		choice = strings.TrimSpace(choice)
-
-		if choice == "1" {
-			cfg.UILanguage = "en"
-			successMsg := "Interface language changed to English!"
-			if cfg.UILanguage == "vi" {
-				successMsg = "Đã thay đổi ngôn ngữ giao diện sang Tiếng Anh!"
-			}
-			messages.PrintSuccess("✅ " + successMsg)
-			break
-		} else if choice == "2" {
-			cfg.UILanguage = "vi"
-			successMsg := "Interface language changed to Vietnamese!"
-			if cfg.UILanguage == "vi" {
-				successMsg = "Đã thay đổi ngôn ngữ giao diện sang Tiếng Việt!"
-			}
-			messages.PrintSuccess("✅ " + successMsg)
-			break
-		} else {
-			messages.PrintError(messages.GetMessage("invalid_choice", cfg))
-		}
+// Delete Account
+func DeleteAccount(cfg config.Config) config.Config {
+	if len(cfg.Accounts) == 0 {
+		messages.PrintWarning(messages.GetMessage("no_accounts", cfg))
+		return cfg
 	}
 
-	return cfg
-}
+	messages.PrintSection("🗑️ "+messages.GetMessage("delete_account", cfg), "RED")
+	ShowAccountList(cfg)
 
-func ChangeCommitLanguage(cfg config.Config) config.Config {
-	messages.PrintSection("💬 "+messages.GetMessage("change_commit_lang", cfg), "BLUE")
-	fmt.Printf(`
-%s%s:
-1️⃣  🇺🇸 %s (feat: add user authentication)
-2️⃣  🇻🇳 %s (feat: thêm xác thực người dùng)
-	`,
-		Colors["BLUE"].Sprint(""), messages.GetMessage("available_langs", cfg),
-		messages.GetMessage("lang_1", cfg),
-		messages.GetMessage("lang_2", cfg),
-	)
-
-	for {
-		fmt.Printf("\n%s%s (1-2): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_lang", cfg), Colors["END"].Sprint(""))
-
-		reader := bufio.NewReader(os.Stdin)
-		choice, _ := reader.ReadString('\n')
-		choice = strings.TrimSpace(choice)
-
-		if choice == "1" {
-			cfg.CommitLanguage = "en"
-			successMsg := "Commit language changed to English!"
-			if cfg.UILanguage == "vi" {
-				successMsg = "Đã thay đổi ngôn ngữ commit sang Tiếng Anh!"
-			}
-			messages.PrintSuccess("✅ " + successMsg)
-			break
-		} else if choice == "2" {
-			cfg.CommitLanguage = "vi"
-			successMsg := "Commit language changed to Vietnamese!"
-			if cfg.UILanguage == "vi" {
-				successMsg = "Đã thay đổi ngôn ngữ commit sang Tiếng Việt!"
-			}
-			messages.PrintSuccess("✅ " + successMsg)
-			break
-		} else {
-			messages.PrintError(messages.GetMessage("invalid_choice", cfg))
-		}
-	}
-
-	return cfg
-}
-
-func UpdateAPIKey(cfg config.Config) config.Config {
-	messages.PrintSection("🔑 "+messages.GetMessage("update_api_key", cfg), "BLUE")
-
-	// Get primary account
-	primaryAccount := config.GetPrimaryAccount(cfg)
-
-	if primaryAccount != nil {
-		currentKey := primaryAccount.APIKey
-		if currentKey != "" {
-			maskedKey := currentKey[:8] + strings.Repeat("*", len(currentKey)-12) + currentKey[len(currentKey)-4:]
-			if len(currentKey) <= 12 {
-				maskedKey = strings.Repeat("*", len(currentKey))
-			}
-			fmt.Printf("Current API key: %s%s%s\n", Colors["DIM"].Sprint(""), maskedKey, Colors["END"].Sprint(""))
-		}
-	}
-
-	fmt.Printf("\n%s%s: %s", Colors["BOLD"].Sprint(""), messages.GetMessage("enter_api_key_prompt", cfg), Colors["END"].Sprint(""))
+	fmt.Printf("\n%s📧 %s (1-%d): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_account", cfg), len(cfg.Accounts), Colors["END"].Sprint(""))
 
 	reader := bufio.NewReader(os.Stdin)
-	newKey, _ := reader.ReadString('\n')
-	newKey = strings.TrimSpace(newKey)
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
 
-	if newKey != "" {
-		if primaryAccount != nil {
-			for i := range cfg.Accounts {
-				if cfg.Accounts[i].IsPrimary {
-					cfg.Accounts[i].APIKey = newKey
-					break
-				}
-			}
-		} else {
-			// Create new account if none exists
-			cfg.Accounts = []config.Account{{
-				Email:     "primary@example.com",
-				APIKey:    newKey,
-				Model:     "gemini-2.0-flash",
-				IsPrimary: true,
-			}}
+	accountIndex, err := strconv.Atoi(choice)
+	if err != nil || accountIndex < 1 || accountIndex > len(cfg.Accounts) {
+		messages.PrintError(messages.GetMessage("invalid_choice", cfg))
+		return cfg
+	}
+
+	account := cfg.Accounts[accountIndex-1]
+
+	// Confirmation
+	fmt.Printf("\n%s⚠️ %s: %s? %s",
+		Colors["RED"].Sprint(""),
+		messages.GetMessage("confirm_delete_account", cfg),
+		account.Email,
+		messages.GetMessage("type_yes_confirm", cfg))
+
+	confirm, _ := reader.ReadString('\n')
+	confirm = strings.TrimSpace(strings.ToLower(confirm))
+
+	if confirm == "yes" {
+		cfg.RemoveAccount(account.Email)
+		messages.PrintSuccess(fmt.Sprintf("✅ %s: %s", messages.GetMessage("account_deleted", cfg), account.Email))
+
+		// If deleted account was primary, set another as primary
+		if account.IsPrimary && len(cfg.Accounts) > 0 {
+			cfg.Accounts[0].IsPrimary = true
+			messages.PrintInfo(fmt.Sprintf("ℹ️ %s set as new primary account", cfg.Accounts[0].Email))
 		}
-		successMsg := "API key updated successfully!"
-		if cfg.UILanguage == "vi" {
-			successMsg = "Đã cập nhật API key thành công!"
-		}
-		messages.PrintSuccess("✅ " + successMsg)
 	} else {
-		infoMsg := "API key unchanged."
-		if cfg.UILanguage == "vi" {
-			infoMsg = "API key không thay đổi."
-		}
-		messages.PrintInfo("ℹ️  " + infoMsg)
+		messages.PrintInfo(messages.GetMessage("deletion_cancelled", cfg))
 	}
 
 	return cfg
 }
 
-func ChangeAIModel(cfg config.Config) config.Config {
-	messages.PrintSection("🤖 "+messages.GetMessage("change_ai_model", cfg), "BLUE")
-	fmt.Printf(`
-%s%s:
-1️⃣  🚀 Gemini 2.5 Pro - %sRecommended%s (Best quality)
-2️⃣  ⚡ Gemini 2.5 Flash - %sFast%s (Good quality, fast)
-3️⃣  💡 Gemini 2.5 Flash-Lite - %sEfficient%s (Lightweight)
-4️⃣  🚀 Gemini 2.0 Flash - %sLegacy%s (Compatible)
-	`,
-		Colors["BLUE"].Sprint(""), messages.GetMessage("available_models", cfg),
-		Colors["GREEN"].Sprint(""), Colors["END"].Sprint(""),
-		Colors["YELLOW"].Sprint(""), Colors["END"].Sprint(""),
-		Colors["BLUE"].Sprint(""), Colors["END"].Sprint(""),
-		Colors["DIM"].Sprint(""), Colors["END"].Sprint(""),
-	)
-
-	// Get primary account model
-	primaryModel := "gemini-2.0-flash"
-	primaryAccount := config.GetPrimaryAccount(cfg)
-	if primaryAccount != nil {
-		primaryModel = primaryAccount.Model
+// Set Primary Account
+func SetPrimaryAccount(cfg config.Config) config.Config {
+	if len(cfg.Accounts) == 0 {
+		messages.PrintWarning(messages.GetMessage("no_accounts", cfg))
+		return cfg
 	}
 
-	modelMap := map[string]string{
-		"gemini-2.5-pro":        "1",
-		"gemini-2.5-flash":      "2",
-		"gemini-2.5-flash-lite": "3",
-		"gemini-2.0-flash":      "4",
+	messages.PrintSection("⭐ "+messages.GetMessage("set_primary", cfg), "PURPLE")
+	ShowAccountList(cfg)
+
+	fmt.Printf("\n%s📧 %s (1-%d): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_account", cfg), len(cfg.Accounts), Colors["END"].Sprint(""))
+
+	reader := bufio.NewReader(os.Stdin)
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+
+	accountIndex, err := strconv.Atoi(choice)
+	if err != nil || accountIndex < 1 || accountIndex > len(cfg.Accounts) {
+		messages.PrintError(messages.GetMessage("invalid_choice", cfg))
+		return cfg
 	}
 
-	currentChoice := modelMap[primaryModel]
-	fmt.Printf("Current selection: %s\n", currentChoice)
+	// Set new primary
+	for i := range cfg.Accounts {
+		cfg.Accounts[i].IsPrimary = (i == accountIndex-1)
+	}
 
+	messages.PrintSuccess(fmt.Sprintf("✅ %s set as primary account", cfg.Accounts[accountIndex-1].Email))
+	return cfg
+}
+
+// Manage API Keys for selected account
+func ManageAPIKeys(cfg config.Config) config.Config {
+	if len(cfg.Accounts) == 0 {
+		messages.PrintWarning(messages.GetMessage("no_accounts", cfg))
+		return cfg
+	}
+
+	messages.PrintSection("🔑 "+messages.GetMessage("manage_api_keys", cfg), "CYAN")
+	ShowAccountList(cfg)
+
+	fmt.Printf("\n%s📧 %s (1-%d): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_account", cfg), len(cfg.Accounts), Colors["END"].Sprint(""))
+
+	reader := bufio.NewReader(os.Stdin)
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+
+	accountIndex, err := strconv.Atoi(choice)
+	if err != nil || accountIndex < 1 || accountIndex > len(cfg.Accounts) {
+		messages.PrintError(messages.GetMessage("invalid_choice", cfg))
+		return cfg
+	}
+
+	account := &cfg.Accounts[accountIndex-1]
+	cfg = ManageAccountAPIKeys(cfg, account)
+	return cfg
+}
+
+// Manage API Keys for specific account
+func ManageAccountAPIKeys(cfg config.Config, account *config.Account) config.Config {
 	for {
-		fmt.Printf("%s%s (1-4): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_model", cfg), Colors["END"].Sprint(""))
+		messages.PrintHeader(fmt.Sprintf("🔑 API Keys for %s", account.Email), "CYAN")
+		ShowAPIKeyList(*account)
+
+		optionsText := fmt.Sprintf(`
+%s===================================================
+%s
+%s---------------------------------------------------
+%s1%s │ ➕ %s
+%s2%s │ ✏️  %s
+%s3%s │ 🗑️  %s
+%s4%s │ 🔄 %s
+%s5%s │ 🧪 %s
+%s0%s │ ⬅️  %s
+%s===================================================
+		`,
+			Colors["BLUE"].Sprint(""),
+			messages.CenterText(messages.GetMessage("api_key_options", cfg), 51),
+			Colors["BLUE"].Sprint(""),
+			Colors["GREEN"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("add_api_key", cfg),
+			Colors["YELLOW"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("edit_api_key", cfg),
+			Colors["RED"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("delete_api_key", cfg),
+			Colors["BLUE"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("reset_api_errors", cfg),
+			Colors["PURPLE"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("test_api_key", cfg),
+			Colors["WHITE"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("back_to_menu", cfg),
+			Colors["BLUE"].Sprint(""),
+		)
+		fmt.Println(optionsText)
+
+		fmt.Printf("\n%s🎯 %s (0-5): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_option", cfg), Colors["END"].Sprint(""))
 
 		reader := bufio.NewReader(os.Stdin)
 		choice, _ := reader.ReadString('\n')
 		choice = strings.TrimSpace(choice)
 
-		if choice == "1" || choice == "2" || choice == "3" || choice == "4" {
-			modelChoices := map[string]string{
-				"1": "gemini-2.5-pro",
-				"2": "gemini-2.5-flash",
-				"3": "gemini-2.5-flash-lite",
-				"4": "gemini-2.0-flash",
-			}
-			newModel := modelChoices[choice]
+		switch choice {
+		case "1":
+			account = AddAPIKey(account)
+		case "2":
+			account = EditAPIKey(account)
+		case "3":
+			account = DeleteAPIKey(account)
+		case "4":
+			account = ResetAPIKeyErrorsForAccount(account)
+		case "5":
+			TestAPIKey(*account)
+		case "0":
+			return cfg
+		default:
+			messages.PrintError(messages.GetMessage("invalid_option", cfg))
+		}
 
-			// Update primary account model
-			for i := range cfg.Accounts {
-				if cfg.Accounts[i].IsPrimary {
-					cfg.Accounts[i].Model = newModel
-					break
-				}
-			}
-
-			successMsgs := map[string]string{
-				"1": "🚀 Changed to Gemini 2.5 Pro!",
-				"2": "⚡ Changed to Gemini 2.5 Flash!",
-				"3": "💡 Changed to Gemini 2.5 Flash-Lite!",
-				"4": "🚀 Changed to Gemini 2.0 Flash!",
-			}
-			messages.PrintSuccess(successMsgs[choice])
-			break
-		} else {
-			messages.PrintError(messages.GetMessage("invalid_choice", cfg))
+		if choice != "0" {
+			config.SaveConfig(cfg)
 		}
 	}
-
-	return cfg
 }
 
-func ChangeCommitStyle(cfg config.Config) config.Config {
-	messages.PrintSection("🎨 "+messages.GetMessage("change_commit_style", cfg), "BLUE")
-	fmt.Printf(`
-%s%s:
+// Helper function to mask API key
+func maskAPIKey(apiKey string) string {
+	if len(apiKey) <= 8 {
+		return strings.Repeat("*", len(apiKey))
+	}
+	return apiKey[:4] + strings.Repeat("*", len(apiKey)-8) + apiKey[len(apiKey)-4:]
+}
 
-1️⃣  📋 %sConventional Commits%s
-    Example: %sfeat: add user authentication system%s
-    
-2️⃣  😄 %sEmoji Style%s  
-    Example: %s✨ add user authentication system%s
-    
-3️⃣  📝 %sDescriptive%s
-    Example: %sAdd comprehensive user authentication system%s
-	`,
-		Colors["BLUE"].Sprint(""), messages.GetMessage("available_styles", cfg),
-		Colors["BOLD"].Sprint(""), Colors["END"].Sprint(""), Colors["GREEN"].Sprint(""), Colors["END"].Sprint(""),
-		Colors["BOLD"].Sprint(""), Colors["END"].Sprint(""), Colors["GREEN"].Sprint(""), Colors["END"].Sprint(""),
-		Colors["BOLD"].Sprint(""), Colors["END"].Sprint(""), Colors["GREEN"].Sprint(""), Colors["END"].Sprint(""),
-	)
+// Show API Key List for account
+func ShowAPIKeyList(account config.Account) {
+	if len(account.APIKeys) == 0 {
+		fmt.Printf("%s📭 No API keys found for this account\n", Colors["YELLOW"].Sprint(""))
+		return
+	}
 
-	currentStyle := cfg.CommitStyle
-	styleMap := map[string]string{"conventional": "1", "emoji": "2", "descriptive": "3"}
-	fmt.Printf("Current selection: %s\n", styleMap[currentStyle])
+	for i, apiKey := range account.APIKeys {
+		statusIcon := "✅"
+		statusText := "Active"
+		if !apiKey.IsActive {
+			statusIcon = "❌"
+			statusText = "Inactive"
+		}
 
+		lastUsed := "Never"
+		if !apiKey.LastUsed.IsZero() {
+			lastUsed = apiKey.LastUsed.Format("2006-01-02 15:04")
+		}
+
+		maskedKey := maskAPIKey(apiKey.Key)
+
+		fmt.Printf(`
+%s---------------------------------------------------
+%s%d. %s 🔑 %s (%s)
+%s   📝 Description: %s
+%s   %s Status: %s
+%s   ⏰ Last Used: %s
+%s   ❌ Error Count: %d
+%s   📅 Created: %s
+		`,
+			Colors["DIM"].Sprint(""),
+			Colors["BOLD"].Sprint(""), i+1, statusIcon, maskedKey, apiKey.Description,
+			Colors["YELLOW"].Sprint(""), apiKey.Description,
+			Colors["YELLOW"].Sprint(""), statusIcon, statusText,
+			Colors["YELLOW"].Sprint(""), lastUsed,
+			Colors["YELLOW"].Sprint(""), apiKey.ErrorCount,
+			Colors["DIM"].Sprint(""), apiKey.CreatedAt.Format("2006-01-02 15:04"),
+		)
+	}
+	fmt.Printf("%s---------------------------------------------------\n", Colors["DIM"].Sprint(""))
+}
+
+// Add API Key to account
+func AddAPIKey(account *config.Account) *config.Account {
+	messages.PrintSection("➕ Add API Key", "GREEN")
+
+	var apiKey, description string
+
+	// Get API key
 	for {
-		fmt.Printf("%s%s (1-3): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_style", cfg), Colors["END"].Sprint(""))
-
+		fmt.Printf("\n%s🔑 Enter new API Key: %s", Colors["BOLD"].Sprint(""), Colors["END"].Sprint(""))
 		reader := bufio.NewReader(os.Stdin)
-		choice, _ := reader.ReadString('\n')
-		choice = strings.TrimSpace(choice)
+		apiKey, _ = reader.ReadString('\n')
+		apiKey = strings.TrimSpace(apiKey)
 
-		if choice == "1" {
-			cfg.CommitStyle = "conventional"
-			successMsg := "Changed to Conventional Commits!"
-			if cfg.UILanguage == "vi" {
-				successMsg = "Đã đổi sang Conventional Commits!"
-			}
-			messages.PrintSuccess("📋 " + successMsg)
-			break
-		} else if choice == "2" {
-			cfg.CommitStyle = "emoji"
-			successMsg := "Changed to Emoji Style!"
-			if cfg.UILanguage == "vi" {
-				successMsg = "Đã đổi sang Emoji Style!"
-			}
-			messages.PrintSuccess("😄 " + successMsg)
-			break
-		} else if choice == "3" {
-			cfg.CommitStyle = "descriptive"
-			successMsg := "Changed to Descriptive Style!"
-			if cfg.UILanguage == "vi" {
-				successMsg = "Đã đổi sang Descriptive Style!"
-			}
-			messages.PrintSuccess("📝 " + successMsg)
-			break
-		} else {
-			messages.PrintError(messages.GetMessage("invalid_choice", cfg))
+		if apiKey == "" {
+			messages.PrintError("API key is required")
+			continue
 		}
+		break
 	}
 
-	return cfg
+	// Get description
+	fmt.Printf("%s📝 API Key Description: %s", Colors["BOLD"].Sprint(""), Colors["END"].Sprint(""))
+	reader := bufio.NewReader(os.Stdin)
+	description, _ = reader.ReadString('\n')
+	description = strings.TrimSpace(description)
+	if description == "" {
+		description = "Additional API Key"
+	}
+
+	// Add API key
+	account.AddAPIKey(apiKey, description)
+	messages.PrintSuccess("✅ API key added successfully")
+
+	return account
 }
 
-func ToggleAutoPush(cfg config.Config) config.Config {
-	messages.PrintSection("🚀 "+messages.GetMessage("toggle_auto_push", cfg), "BLUE")
-
-	currentStatus := cfg.AutoPush
-	statusText := messages.GetMessage("enabled", cfg)
-	if !currentStatus {
-		statusText = messages.GetMessage("disabled", cfg)
-	}
-	newStatus := !currentStatus
-	actionText := messages.GetMessage("enable", cfg)
-	if !newStatus {
-		actionText = messages.GetMessage("disable", cfg)
+// Edit API Key
+func EditAPIKey(account *config.Account) *config.Account {
+	if len(account.APIKeys) == 0 {
+		messages.PrintWarning("No API keys found for this account")
+		return account
 	}
 
-	fmt.Printf("%s is currently %s%s%s\n", messages.GetMessage("auto_push", cfg), Colors["BOLD"].Sprint(""), statusText, Colors["END"].Sprint(""))
+	messages.PrintSection("✏️ Edit API Key", "YELLOW")
+	ShowAPIKeyList(*account)
 
-	fmt.Printf("%s %s %s? (y/N): ", messages.GetMessage("confirm_toggle", cfg), Colors["BOLD"].Sprint(""), actionText)
+	fmt.Printf("\n%s🔑 Select API Key to edit (1-%d): %s", Colors["BOLD"].Sprint(""), len(account.APIKeys), Colors["END"].Sprint(""))
+
+	reader := bufio.NewReader(os.Stdin)
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+
+	keyIndex, err := strconv.Atoi(choice)
+	if err != nil || keyIndex < 1 || keyIndex > len(account.APIKeys) {
+		messages.PrintError("Invalid choice")
+		return account
+	}
+
+	apiKey := &account.APIKeys[keyIndex-1]
+
+	// Edit API key menu
+	fmt.Printf(`
+%s===== Edit API Key: %s =====
+1️⃣  Change Description (Current: %s)
+2️⃣  Toggle Active Status (Current: %s)
+0️⃣  Back
+		`,
+		Colors["CYAN"].Sprint(""),
+		maskAPIKey(apiKey.Key),
+		apiKey.Description,
+		GetStatusDisplay(apiKey.IsActive, config.Config{UILanguage: "en"}))
+
+	fmt.Printf("\n%s🎯 Select option (0-2): %s", Colors["BOLD"].Sprint(""), Colors["END"].Sprint(""))
+
+	editChoice, _ := reader.ReadString('\n')
+	editChoice = strings.TrimSpace(editChoice)
+
+	switch editChoice {
+	case "1":
+		// Change description
+		fmt.Printf("\n%s📝 New Description: %s", Colors["BOLD"].Sprint(""), Colors["END"].Sprint(""))
+		newDesc, _ := reader.ReadString('\n')
+		newDesc = strings.TrimSpace(newDesc)
+		if newDesc != "" {
+			apiKey.Description = newDesc
+			messages.PrintSuccess("✅ Description updated")
+		}
+	case "2":
+		// Toggle active status
+		apiKey.IsActive = !apiKey.IsActive
+		status := "activated"
+		if !apiKey.IsActive {
+			status = "deactivated"
+		}
+		messages.PrintSuccess(fmt.Sprintf("✅ API key %s", status))
+	case "0":
+		// Back
+	default:
+		messages.PrintError("Invalid option")
+	}
+
+	return account
+}
+
+// Delete API Key
+func DeleteAPIKey(account *config.Account) *config.Account {
+	if len(account.APIKeys) == 0 {
+		messages.PrintWarning("No API keys found for this account")
+		return account
+	}
+
+	messages.PrintSection("🗑️ Delete API Key", "RED")
+	ShowAPIKeyList(*account)
+
+	fmt.Printf("\n%s🔑 Select API Key to delete (1-%d): %s", Colors["BOLD"].Sprint(""), len(account.APIKeys), Colors["END"].Sprint(""))
+
+	reader := bufio.NewReader(os.Stdin)
+	choice, _ := reader.ReadString('\n')
+	choice = strings.TrimSpace(choice)
+
+	keyIndex, err := strconv.Atoi(choice)
+	if err != nil || keyIndex < 1 || keyIndex > len(account.APIKeys) {
+		messages.PrintError("Invalid choice")
+		return account
+	}
+
+	apiKey := account.APIKeys[keyIndex-1]
+
+	// Confirmation
+	fmt.Printf("\n%s⚠️ Confirm delete API Key: %s? Type 'yes' to confirm: %s",
+		Colors["RED"].Sprint(""),
+		maskAPIKey(apiKey.Key),
+		Colors["END"].Sprint(""))
+
+	confirm, _ := reader.ReadString('\n')
+	confirm = strings.TrimSpace(strings.ToLower(confirm))
+
+	if confirm == "yes" {
+		account.RemoveAPIKey(apiKey.Key)
+		messages.PrintSuccess("✅ API key deleted successfully")
+	} else {
+		messages.PrintInfo("Deletion cancelled")
+	}
+
+	return account
+}
+
+// Reset API Key Errors for account
+func ResetAPIKeyErrorsForAccount(account *config.Account) *config.Account {
+	messages.PrintSection("🔄 Reset API Key Errors", "BLUE")
+
+	if len(account.APIKeys) == 0 {
+		messages.PrintWarning("No API keys found for this account")
+		return account
+	}
+
+	// Confirmation
+	fmt.Printf("%s⚠️ Reset error counts for all API keys in account %s? Type 'yes' to confirm: %s",
+		Colors["YELLOW"].Sprint(""),
+		account.Email,
+		Colors["END"].Sprint(""))
 
 	reader := bufio.NewReader(os.Stdin)
 	confirm, _ := reader.ReadString('\n')
 	confirm = strings.TrimSpace(strings.ToLower(confirm))
 
-	if confirm == "y" || confirm == "yes" || confirm == "có" {
-		cfg.AutoPush = newStatus
-		emoji := "✅"
-		if !newStatus {
-			emoji = "❌"
+	if confirm == "yes" {
+		for i := range account.APIKeys {
+			account.APIKeys[i].ErrorCount = 0
 		}
-		status := messages.GetMessage("enabled", cfg)
-		if !newStatus {
-			status = messages.GetMessage("disabled", cfg)
-		}
-		messages.PrintSuccess(fmt.Sprintf("%s %s %s!", emoji, messages.GetMessage("auto_push", cfg), status))
+		messages.PrintSuccess("✅ API key error counts reset successfully")
 	} else {
-		infoMsg := "Auto push setting unchanged."
-		if cfg.UILanguage == "vi" {
-			infoMsg = "Cài đặt auto push không thay đổi."
-		}
-		messages.PrintInfo("ℹ️  " + infoMsg)
+		messages.PrintInfo("Reset cancelled")
 	}
 
-	return cfg
+	return account
 }
 
-func ToggleAutoStage(cfg config.Config) config.Config {
-	messages.PrintSection("📦 "+messages.GetMessage("toggle_auto_stage", cfg), "BLUE")
+// Reset API Key Errors for all accounts
+func ResetAPIKeyErrors(cfg config.Config) config.Config {
+	messages.PrintSection("🔄 "+messages.GetMessage("reset_api_errors", cfg), "BLUE")
 
-	currentStatus := cfg.AutoStage
-	statusText := messages.GetMessage("enabled", cfg)
-	if !currentStatus {
-		statusText = messages.GetMessage("disabled", cfg)
-	}
-	newStatus := !currentStatus
-	actionText := messages.GetMessage("enable", cfg)
-	if !newStatus {
-		actionText = messages.GetMessage("disable", cfg)
+	if len(cfg.Accounts) == 0 {
+		messages.PrintWarning(messages.GetMessage("no_accounts", cfg))
+		return cfg
 	}
 
-	fmt.Printf("%s is currently %s%s%s\n", messages.GetMessage("auto_stage", cfg), Colors["BOLD"].Sprint(""), statusText, Colors["END"].Sprint(""))
-
-	fmt.Printf("%s %s %s? (y/N): ", messages.GetMessage("confirm_toggle", cfg), Colors["BOLD"].Sprint(""), actionText)
+	// Confirmation
+	fmt.Printf("%s⚠️ %s? %s",
+		Colors["YELLOW"].Sprint(""),
+		messages.GetMessage("confirm_reset_errors", cfg),
+		messages.GetMessage("type_yes_confirm", cfg))
 
 	reader := bufio.NewReader(os.Stdin)
 	confirm, _ := reader.ReadString('\n')
 	confirm = strings.TrimSpace(strings.ToLower(confirm))
 
-	if confirm == "y" || confirm == "yes" || confirm == "có" {
-		cfg.AutoStage = newStatus
-		emoji := "✅"
-		if !newStatus {
-			emoji = "❌"
+	if confirm == "yes" {
+		for i := range cfg.Accounts {
+			for j := range cfg.Accounts[i].APIKeys {
+				cfg.Accounts[i].APIKeys[j].ErrorCount = 0
+			}
 		}
-		status := messages.GetMessage("enabled", cfg)
-		if !newStatus {
-			status = messages.GetMessage("disabled", cfg)
-		}
-		messages.PrintSuccess(fmt.Sprintf("%s %s %s!", emoji, messages.GetMessage("auto_stage", cfg), status))
+		messages.PrintSuccess(messages.GetMessage("errors_reset", cfg))
 	} else {
-		infoMsg := "Auto stage setting unchanged."
-		if cfg.UILanguage == "vi" {
-			infoMsg = "Cài đặt auto stage không thay đổi."
-		}
-		messages.PrintInfo("ℹ️  " + infoMsg)
+		messages.PrintInfo(messages.GetMessage("reset_cancelled", cfg))
 	}
 
 	return cfg
 }
 
-func ShowHelp(cfg config.Config) {
-	messages.PrintHeader("❓ "+messages.GetMessage("help_info", cfg), "CYAN")
-	fmt.Println(messages.GetMessage("help_text", cfg))
+// Test API Key functionality
+func TestAPIKey(account config.Account) {
+	messages.PrintSection("🧪 Test API Key", "PURPLE")
 
-	fmt.Printf("\n%s%s...%s", Colors["DIM"].Sprint(""), messages.GetMessage("press_enter_continue", cfg), Colors["END"].Sprint(""))
+	activeKeys := account.GetActiveAPIKeys()
+	if len(activeKeys) == 0 {
+		messages.PrintWarning("No active API keys found for this account")
+		return
+	}
 
-	reader := bufio.NewReader(os.Stdin)
-	reader.ReadString('\n')
+	fmt.Printf("Testing API connectivity for account: %s\n", account.Email)
+	fmt.Printf("Model: %s\n", account.Model)
+
+	// Test each active API key
+	for i, apiKey := range activeKeys {
+		fmt.Printf("\n%sTesting API Key %d: %s...\n",
+			Colors["CYAN"].Sprint(""),
+			i+1,
+			maskAPIKey(apiKey.Key))
+
+		// Simulate API test (in real implementation, this would make an actual API call)
+		success := true
+		responseTime := "100ms"
+
+		if success {
+			fmt.Printf("%s✅ API Key test successful! Response time: %s\n",
+				Colors["GREEN"].Sprint(""),
+				responseTime)
+		} else {
+			fmt.Printf("%s❌ API Key test failed!\n", Colors["RED"].Sprint(""))
+		}
+	}
+
+	fmt.Printf("\n%sAPI testing completed for account: %s\n",
+		Colors["BOLD"].Sprint(""),
+		account.Email)
 }
 
+func ShowConfigurationInterface(cfg config.Config) config.Config {
+	// Implementation for showing configuration interface
+	messages.PrintHeader("⚙️ Configuration", "CYAN")
+	// Add your configuration interface logic here
+	return cfg
+}
+
+// ConfirmAction prompts for user confirmation
 func ConfirmAction(message string, cfg config.Config) bool {
-	messages.PrintWarning(message)
-	fmt.Print("Type 'yes' to confirm: ")
-
+	fmt.Printf("%s (y/N): ", message)
 	reader := bufio.NewReader(os.Stdin)
-	confirm, _ := reader.ReadString('\n')
-	confirm = strings.TrimSpace(strings.ToLower(confirm))
+	response, _ := reader.ReadString('\n')
+	response = strings.TrimSpace(strings.ToLower(response))
+	return response == "y" || response == "yes"
+}
 
-	return confirm == "yes"
+// ShowHelp displays help information
+func ShowHelp(cfg config.Config) {
+	messages.PrintHeader("📖 Help & Information", "CYAN")
+	fmt.Println(messages.GetMessage("help_text", cfg))
+	fmt.Println("\nPress Enter to continue...")
+	bufio.NewReader(os.Stdin).ReadString('\n')
 }

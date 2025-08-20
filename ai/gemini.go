@@ -1,11 +1,17 @@
+// ai/gemini.go - Enhanced version with API key rotation and fallback
+
 package ai
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
+	"time"
+
+	"dev_tool/config"
 )
 
 type GeminiRequest struct {
@@ -22,13 +28,126 @@ type Part struct {
 
 type GeminiResponse struct {
 	Candidates []Candidate `json:"candidates"`
+	Error      *APIError   `json:"error,omitempty"`
 }
 
 type Candidate struct {
 	Content Content `json:"content"`
 }
 
-func GenerateCommitMessage(diffText string, apiKey string, model string, commitStyle string, commitLanguage string) (string, error) {
+type APIError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Status  string `json:"status"`
+}
+
+// API Error types for better error handling
+const (
+	ErrorTypeQuotaExceeded = "QUOTA_EXCEEDED"
+	ErrorTypeInvalidAPI    = "INVALID_API_KEY"
+	ErrorTypeExpiredAPI    = "API_KEY_EXPIRED"
+	ErrorTypeRateLimit     = "RATE_LIMIT_EXCEEDED"
+	ErrorTypeServerError   = "INTERNAL_ERROR"
+)
+
+// Enhanced GenerateCommitMessage with API key rotation and fallback
+func GenerateCommitMessage(diffText string, cfg config.Config) (string, error) {
+	return GenerateCommitMessageWithRetry(diffText, cfg.CommitStyle, cfg.CommitLanguage, cfg)
+}
+
+// GenerateCommitMessageWithRetry implements the retry logic with multiple API keys
+func GenerateCommitMessageWithRetry(diffText, commitStyle, commitLanguage string, cfg config.Config) (string, error) {
+	// Get all available API keys
+	availableKeys := config.GetAllAvailableAPIKeys(cfg)
+	if len(availableKeys) == 0 {
+		return "", fmt.Errorf("no active API keys available")
+	}
+
+	var lastError error
+	maxRetries := cfg.MaxRetries
+	if maxRetries <= 0 {
+		maxRetries = 3
+	}
+
+	// Try each available API key
+	for _, keyInfo := range availableKeys {
+		account := keyInfo.Account
+		apiKey := keyInfo.APIKey
+
+		fmt.Printf("🔑 Trying API key: %s (%s)\n",
+			maskAPIKey(apiKey.Key),
+			apiKey.Description)
+
+		for retry := 0; retry < maxRetries; retry++ {
+			if retry > 0 {
+				fmt.Printf("   ⏳ Retry %d/%d...\n", retry+1, maxRetries)
+				time.Sleep(time.Duration(retry) * time.Second) // Exponential backoff
+			}
+
+			message, err := generateCommitMessageSingle(
+				diffText,
+				apiKey.Key,
+				account.Model,
+				commitStyle,
+				commitLanguage,
+			)
+
+			if err == nil {
+				// Success! Mark API key as used and save config
+				account.MarkAPIKeyUsed(apiKey.ID)
+				config.SaveConfig(cfg)
+				return message, nil
+			}
+
+			// Handle different types of errors
+			errorType := categorizeError(err)
+			fmt.Printf("   ❌ Error: %v (Type: %s)\n", err, errorType)
+
+			switch errorType {
+			case ErrorTypeQuotaExceeded, ErrorTypeRateLimit:
+				// Mark as failed but continue to next API key
+				account.MarkAPIKeyFailed(apiKey.ID)
+				lastError = err
+				goto nextAPIKey
+
+			case ErrorTypeInvalidAPI, ErrorTypeExpiredAPI:
+				// Mark as failed and move to next API key immediately
+				account.MarkAPIKeyFailed(apiKey.ID)
+				fmt.Printf("   🚫 API key marked as inactive due to: %s\n", errorType)
+				lastError = err
+				goto nextAPIKey
+
+			case ErrorTypeServerError:
+				// Server error - retry with same API key
+				lastError = err
+				continue
+
+			default:
+				// Unknown error - retry with same API key
+				lastError = err
+				continue
+			}
+		}
+
+		// All retries exhausted for this API key
+		account.MarkAPIKeyFailed(apiKey.ID)
+		fmt.Printf("   🚫 API key exhausted after %d retries\n", maxRetries)
+
+	nextAPIKey:
+		// Save config after marking API key as failed
+		config.SaveConfig(cfg)
+	}
+
+	// All API keys have been tried
+	if lastError != nil {
+		return "", fmt.Errorf("all API keys failed, last error: %v", lastError)
+	}
+
+	return "", fmt.Errorf("no API keys available for use")
+}
+
+// generateCommitMessageSingle - original function logic for single API key
+func generateCommitMessageSingle(diffText, apiKey, model, commitStyle, commitLanguage string) (string, error) {
 	if apiKey == "" {
 		return "", fmt.Errorf("API key not configured")
 	}
@@ -47,39 +166,111 @@ func GenerateCommitMessage(diffText string, apiKey string, model string, commitS
 
 	jsonData, err := json.Marshal(requestBody)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to marshal request: %v", err)
 	}
 
 	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, apiKey)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create request: %v", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 30 * time.Second, // Add timeout
+	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("request failed: %v", err)
 	}
 	defer resp.Body.Close()
 
+	// Read response body for error details
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %v", err)
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API request failed with status: %s", resp.Status)
+		// Try to parse error response
+		var errorResponse GeminiResponse
+		if json.Unmarshal(body, &errorResponse) == nil && errorResponse.Error != nil {
+			return "", fmt.Errorf("API error (code: %d): %s",
+				errorResponse.Error.Code,
+				errorResponse.Error.Message)
+		}
+		return "", fmt.Errorf("API request failed with status: %s, response: %s", resp.Status, string(body))
 	}
 
 	var geminiResponse GeminiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&geminiResponse); err != nil {
-		return "", err
+	if err := json.Unmarshal(body, &geminiResponse); err != nil {
+		return "", fmt.Errorf("failed to parse response: %v", err)
 	}
 
 	if len(geminiResponse.Candidates) == 0 || len(geminiResponse.Candidates[0].Content.Parts) == 0 {
-		return "", fmt.Errorf("no response from AI")
+		return "", fmt.Errorf("no response from AI, full response: %s", string(body))
 	}
 
 	message := geminiResponse.Candidates[0].Content.Parts[0].Text
 	return FormatCommitMessage(message, commitStyle), nil
+}
+
+// categorizeError determines the type of error for appropriate handling
+func categorizeError(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	errMsg := strings.ToLower(err.Error())
+
+	// Check for quota/rate limit errors
+	if strings.Contains(errMsg, "quota") ||
+		strings.Contains(errMsg, "rate limit") ||
+		strings.Contains(errMsg, "too many requests") ||
+		strings.Contains(errMsg, "429") {
+		return ErrorTypeRateLimit
+	}
+
+	// Check for API key errors
+	if strings.Contains(errMsg, "api key") &&
+		(strings.Contains(errMsg, "invalid") ||
+			strings.Contains(errMsg, "unauthorized") ||
+			strings.Contains(errMsg, "401") ||
+			strings.Contains(errMsg, "403")) {
+		return ErrorTypeInvalidAPI
+	}
+
+	// Check for expired API key
+	if strings.Contains(errMsg, "expired") ||
+		strings.Contains(errMsg, "permission denied") {
+		return ErrorTypeExpiredAPI
+	}
+
+	// Check for server errors
+	if strings.Contains(errMsg, "internal") ||
+		strings.Contains(errMsg, "server error") ||
+		strings.Contains(errMsg, "500") ||
+		strings.Contains(errMsg, "502") ||
+		strings.Contains(errMsg, "503") ||
+		strings.Contains(errMsg, "504") {
+		return ErrorTypeServerError
+	}
+
+	return "UNKNOWN_ERROR"
+}
+
+// maskAPIKey masks the API key for logging purposes
+func maskAPIKey(apiKey string) string {
+	if len(apiKey) <= 8 {
+		return strings.Repeat("*", len(apiKey))
+	}
+	return apiKey[:4] + strings.Repeat("*", len(apiKey)-8) + apiKey[len(apiKey)-4:]
+}
+
+// Legacy function for backward compatibility
+func GenerateCommitMessageLegacy(diffText string, apiKey string, model string, commitStyle string, commitLanguage string) (string, error) {
+	return generateCommitMessageSingle(diffText, apiKey, model, commitStyle, commitLanguage)
 }
 
 func GetCommitPrompt(commitStyle string, commitLanguage string, diffText string) string {
@@ -147,7 +338,7 @@ feat(auth): add user authentication system
 - Add email verification for new registrations
 - Implement rate limiting on authentication endpoints
 `, getTypeList(commitTypes["en"])),
-			"emoji": fmt.Sprintf(`
+			"emoji": `
 Generate an emoji-style commit message in English following these rules:
 1. Format: emoji description (no type prefix)
 2. Use appropriate emoji for the change type:
@@ -163,7 +354,7 @@ Example format:
 - Create user session management with Redis storage
 - Add email verification for new registrations
 - Implement rate limiting on authentication endpoints
-`),
+`,
 			"descriptive": `
 Generate a descriptive commit message in English following these rules:
 1. Write a clear, descriptive title (no prefixes or emojis)

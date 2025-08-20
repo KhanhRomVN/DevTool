@@ -9,13 +9,26 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
+type APIKey struct {
+	ID          string    `json:"id"`
+	Key         string    `json:"key"`
+	Description string    `json:"description"`
+	IsActive    bool      `json:"is_active"`
+	LastUsed    time.Time `json:"last_used"`
+	ErrorCount  int       `json:"error_count"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 type Account struct {
-	Email     string `json:"email"`
-	APIKey    string `json:"api_key"`
-	Model     string `json:"model"`
-	IsPrimary bool   `json:"is_primary"`
+	Email     string    `json:"email"`
+	APIKeys   []APIKey  `json:"api_keys"` // Multiple API keys per account
+	Model     string    `json:"model"`
+	IsPrimary bool      `json:"is_primary"`
+	IsActive  bool      `json:"is_active"` // Account level active status
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type Config struct {
@@ -28,6 +41,8 @@ type Config struct {
 	MaxLineLength       int       `json:"max_line_length"`
 	ShowDiffStats       bool      `json:"show_diff_stats"`
 	ConfirmBeforeCommit bool      `json:"confirm_before_commit"`
+	APIKeyRotation      bool      `json:"api_key_rotation"` // Enable automatic API key rotation
+	MaxRetries          int       `json:"max_retries"`      // Max retries per API key
 }
 
 var (
@@ -48,8 +63,201 @@ var (
 		MaxLineLength:       72,
 		ShowDiffStats:       true,
 		ConfirmBeforeCommit: true,
+		APIKeyRotation:      true,
+		MaxRetries:          3,
 	}
 )
+
+// Generate unique ID for API key
+func generateAPIKeyID() string {
+	return fmt.Sprintf("api_%d", time.Now().UnixNano())
+}
+
+// Add API Key to account
+func (a *Account) AddAPIKey(key, description string) {
+	newAPIKey := APIKey{
+		ID:          generateAPIKeyID(),
+		Key:         key,
+		Description: description,
+		IsActive:    true,
+		LastUsed:    time.Time{},
+		ErrorCount:  0,
+		CreatedAt:   time.Now(),
+	}
+	a.APIKeys = append(a.APIKeys, newAPIKey)
+}
+
+// Remove API Key from account
+func (a *Account) RemoveAPIKey(keyID string) bool {
+	for i, apiKey := range a.APIKeys {
+		if apiKey.ID == keyID {
+			a.APIKeys = append(a.APIKeys[:i], a.APIKeys[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+// Get active API Keys from account
+func (a *Account) GetActiveAPIKeys() []APIKey {
+	var activeKeys []APIKey
+	for _, key := range a.APIKeys {
+		if key.IsActive {
+			activeKeys = append(activeKeys, key)
+		}
+	}
+	return activeKeys
+}
+
+// Mark API Key as used and update last used time
+func (a *Account) MarkAPIKeyUsed(keyID string) {
+	for i := range a.APIKeys {
+		if a.APIKeys[i].ID == keyID {
+			a.APIKeys[i].LastUsed = time.Now()
+			break
+		}
+	}
+}
+
+// Mark API Key as failed (increment error count)
+func (a *Account) MarkAPIKeyFailed(keyID string) {
+	for i := range a.APIKeys {
+		if a.APIKeys[i].ID == keyID {
+			a.APIKeys[i].ErrorCount++
+			// Deactivate API key if too many failures
+			if a.APIKeys[i].ErrorCount >= 5 {
+				a.APIKeys[i].IsActive = false
+			}
+			break
+		}
+	}
+}
+
+// Reset API Key error count
+func (a *Account) ResetAPIKeyErrors(keyID string) {
+	for i := range a.APIKeys {
+		if a.APIKeys[i].ID == keyID {
+			a.APIKeys[i].ErrorCount = 0
+			a.APIKeys[i].IsActive = true
+			break
+		}
+	}
+}
+
+// Get best available API key (least recently used among active keys)
+func (a *Account) GetBestAPIKey() *APIKey {
+	activeKeys := a.GetActiveAPIKeys()
+	if len(activeKeys) == 0 {
+		return nil
+	}
+
+	// Sort by last used time (oldest first)
+	bestKey := &activeKeys[0]
+	for i := range activeKeys {
+		if activeKeys[i].LastUsed.Before(bestKey.LastUsed) {
+			bestKey = &activeKeys[i]
+		}
+	}
+
+	return bestKey
+}
+
+// Get primary account with fallback logic
+func GetPrimaryAccountWithFallback(config Config) *Account {
+	// First try to get primary account
+	for i := range config.Accounts {
+		if config.Accounts[i].IsPrimary && config.Accounts[i].IsActive {
+			if len(config.Accounts[i].GetActiveAPIKeys()) > 0 {
+				return &config.Accounts[i]
+			}
+		}
+	}
+
+	// Fallback to any active account with API keys
+	for i := range config.Accounts {
+		if config.Accounts[i].IsActive && len(config.Accounts[i].GetActiveAPIKeys()) > 0 {
+			return &config.Accounts[i]
+		}
+	}
+
+	return nil
+}
+
+// Get all available API keys from all active accounts
+func GetAllAvailableAPIKeys(config Config) []struct {
+	Account *Account
+	APIKey  *APIKey
+} {
+	var result []struct {
+		Account *Account
+		APIKey  *APIKey
+	}
+
+	for i := range config.Accounts {
+		if config.Accounts[i].IsActive {
+			activeKeys := config.Accounts[i].GetActiveAPIKeys()
+			for j := range activeKeys {
+				result = append(result, struct {
+					Account *Account
+					APIKey  *APIKey
+				}{
+					Account: &config.Accounts[i],
+					APIKey:  &activeKeys[j],
+				})
+			}
+		}
+	}
+
+	return result
+}
+
+// Add new account with API key
+func (c *Config) AddAccount(email, apiKey, model, description string, isPrimary bool) {
+	// If this is set as primary, unset other primary accounts
+	if isPrimary {
+		for i := range c.Accounts {
+			c.Accounts[i].IsPrimary = false
+		}
+	}
+
+	newAccount := Account{
+		Email:     email,
+		APIKeys:   []APIKey{},
+		Model:     model,
+		IsPrimary: isPrimary,
+		IsActive:  true,
+		CreatedAt: time.Now(),
+	}
+
+	newAccount.AddAPIKey(apiKey, description)
+	c.Accounts = append(c.Accounts, newAccount)
+}
+
+// Remove account (and all its API keys)
+func (c *Config) RemoveAccount(email string) bool {
+	for i, account := range c.Accounts {
+		if account.Email == email {
+			c.Accounts = append(c.Accounts[:i], c.Accounts[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+// Find account by email
+func (c *Config) FindAccount(email string) *Account {
+	for i := range c.Accounts {
+		if c.Accounts[i].Email == email {
+			return &c.Accounts[i]
+		}
+	}
+	return nil
+}
+
+// Legacy function for backward compatibility
+func GetPrimaryAccount(config Config) *Account {
+	return GetPrimaryAccountWithFallback(config)
+}
 
 func GetConfigDir() string {
 	switch runtime.GOOS {
@@ -85,7 +293,27 @@ func LoadConfig() Config {
 		return CreateInitialConfig()
 	}
 
+	// Migration: Convert old single APIKey format to new multiple APIKeys format
+	migrateOldConfig(&config)
+
 	return config
+}
+
+// Migration function for backward compatibility
+func migrateOldConfig(config *Config) {
+	for i := range config.Accounts {
+		account := &config.Accounts[i]
+
+		// Check if this account uses old format (no APIKeys array but has APIKey field)
+		// This would be detected by checking if APIKeys is empty but account was created before
+		if len(account.APIKeys) == 0 {
+			// Assuming old format had APIKey field, we need to handle this in JSON unmarshaling
+			// For now, just ensure CreatedAt is set
+			if account.CreatedAt.IsZero() {
+				account.CreatedAt = time.Now()
+			}
+		}
+	}
 }
 
 func SaveConfig(config Config) error {
@@ -127,28 +355,22 @@ func CreateInitialConfig() Config {
 		config.UILanguage = "vi"
 	}
 
-	// Add first account
+	// Add first account with API key
 	fmt.Println("\n📧 Add your first Gemini account")
 
-	account := Account{
-		Email:     "",
-		APIKey:    "",
-		Model:     "gemini-2.0-flash",
-		IsPrimary: true,
-	}
-
-	for account.Email == "" {
+	var email, apiKey string
+	for email == "" {
 		fmt.Print("📧 Email: ")
-		fmt.Scanln(&account.Email)
-		if account.Email == "" {
+		fmt.Scanln(&email)
+		if email == "" {
 			fmt.Println("❌ Email is required.")
 		}
 	}
 
-	for account.APIKey == "" {
+	for apiKey == "" {
 		fmt.Print("🔑 API Key: ")
-		fmt.Scanln(&account.APIKey)
-		if account.APIKey == "" {
+		fmt.Scanln(&apiKey)
+		if apiKey == "" {
 			fmt.Println("❌ API Key is required.")
 		}
 	}
@@ -168,9 +390,11 @@ func CreateInitialConfig() Config {
 		}
 		fmt.Println("❌ Invalid choice. Please try again.")
 	}
-	account.Model = GeminiModels[modelChoice-1]
 
-	config.Accounts = []Account{account}
+	selectedModel := GeminiModels[modelChoice-1]
+
+	// Add account with API key
+	config.AddAccount(email, apiKey, selectedModel, "Primary API Key", true)
 
 	// Commit language selection
 	fmt.Println("\n💬 Choose commit message language")
@@ -478,10 +702,11 @@ func UninstallTool() {
 	os.Exit(0)
 }
 
-func GetPrimaryAccount(config Config) *Account {
-	for i, account := range config.Accounts {
-		if account.IsPrimary {
-			return &config.Accounts[i]
+// FindAPIKey finds an API key by value
+func (a *Account) FindAPIKey(key string) *APIKey {
+	for i, apiKey := range a.APIKeys {
+		if apiKey.Key == key {
+			return &a.APIKeys[i]
 		}
 	}
 	return nil
