@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	version = "2.0.2"
+	version = "2.0.3"
 )
 
 func main() {
@@ -32,11 +32,29 @@ Features:
 - Multiple commit styles
 - Cross-platform compatibility`,
 		Version: version,
+		Run: func(cmd *cobra.Command, args []string) {
+			// Check if the first argument is "." - if so, run auto-commit
+			if len(args) > 0 && args[0] == "." {
+				cfg := config.LoadConfig()
+				HandleAutoCommit(false, cfg)
+				return
+			}
+
+			// If no arguments, show help
+			if len(args) == 0 {
+				cmd.Help()
+				return
+			}
+
+			// For any other arguments, show help
+			cmd.Help()
+		},
 	}
 
 	rootCmd.AddCommand(
 		newAutoCommitCmd(),
 		newSettingsCmd(),
+		newDotCmd(), // Add the explicit dot command
 	)
 
 	if err := rootCmd.Execute(); err != nil {
@@ -51,6 +69,30 @@ func newAutoCommitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "auto-commit",
 		Short: "Generate and commit with AI message",
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg := config.LoadConfig()
+			HandleAutoCommit(noPush, cfg)
+		},
+	}
+
+	cmd.Flags().BoolVar(&noPush, "no-push", false, "Skip automatic push after commit")
+	return cmd
+}
+
+// Add explicit dot command for better help documentation
+func newDotCmd() *cobra.Command {
+	var noPush bool
+
+	cmd := &cobra.Command{
+		Use:   ".",
+		Short: "Quick commit with AI-generated message (alias for auto-commit)",
+		Long: `Quick commit with AI-generated message.
+
+This is a shortcut for the auto-commit command, allowing you to simply run:
+  dev_tool .
+
+Instead of:
+  dev_tool auto-commit`,
 		Run: func(cmd *cobra.Command, args []string) {
 			cfg := config.LoadConfig()
 			HandleAutoCommit(noPush, cfg)
