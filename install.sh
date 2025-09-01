@@ -475,26 +475,39 @@ install_go() {
         *) arch="amd64" ;;
     esac
     
-    # Get the latest Go version
-    print_info "$(text "downloading_go")..."
-    local go_version=$(curl -s https://golang.org/VERSION?m=text | head -n 1)
+    # Use fixed version for Windows to avoid download issues
+    local go_version="go1.21.0"
     
-    if [[ -z "$go_version" ]]; then
-        go_version="go1.21.0"  # Fallback version
+    # For non-Windows systems, try to get latest version
+    if [[ "$os" != "windows" ]]; then
+        go_version=$(curl -s https://golang.org/VERSION?m=text | head -n 1)
+        if [[ -z "$go_version" ]]; then
+            go_version="go1.21.0"
+        fi
     fi
     
     local go_url=""
     local temp_dir=$(mktemp -d)
     
+    print_info "$(text "downloading_go")..."
+    
     if [[ "$os" == "windows" ]]; then
         go_url="https://dl.google.com/go/${go_version}.windows-${arch}.zip"
-        curl -L -o "$temp_dir/go.zip" "$go_url"
+        if command -v curl >/dev/null 2>&1; then
+            curl -L -o "$temp_dir/go.zip" "$go_url"
+        else
+            wget -O "$temp_dir/go.zip" "$go_url"
+        fi
         unzip -q "$temp_dir/go.zip" -d "$temp_dir"
         mv "$temp_dir/go" "$HOME/go"
         rm -f "$temp_dir/go.zip"
     else
         go_url="https://dl.google.com/go/${go_version}.${os}-${arch}.tar.gz"
-        curl -L -o "$temp_dir/go.tar.gz" "$go_url"
+        if command -v curl >/dev/null 2>&1; then
+            curl -L -o "$temp_dir/go.tar.gz" "$go_url"
+        else
+            wget -O "$temp_dir/go.tar.gz" "$go_url"
+        fi
         tar -xzf "$temp_dir/go.tar.gz" -C "$temp_dir"
         mv "$temp_dir/go" "$HOME/go"
         rm -f "$temp_dir/go.tar.gz"
@@ -518,7 +531,6 @@ install_go() {
     rm -rf "$temp_dir"
     print_success "$(text "go_install_success")"
 }
-
 build_from_source() {
     print_step "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Đang build $TOOL_NAME từ mã nguồn"; else echo "Building $TOOL_NAME from source"; fi)..."
     
