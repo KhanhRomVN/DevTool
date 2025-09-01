@@ -224,6 +224,27 @@ text() {
                 echo "Get started with: $BINARY_NAME --help"
             fi
             ;;
+        "installing_go")
+            if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+                echo "Đang cài đặt Go mới nhất"
+            else
+                echo "Installing latest Go"
+            fi
+            ;;
+        "go_install_success")
+            if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+                echo "Go đã được cài đặt thành công"
+            else
+                echo "Go installed successfully"
+            fi
+            ;;
+        "downloading_go")
+            if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+                echo "Đang tải Go"
+            else
+                echo "Downloading Go"
+            fi
+            ;;
         *)
             echo "$key"
             ;;
@@ -434,6 +455,68 @@ check_go_installation() {
         print_warning "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Go chưa được cài đặt trên hệ thống này"; else echo "Go is not installed on this system"; fi)"
         return 1
     fi
+}
+
+# Function to install Go automatically
+install_go() {
+    print_step "$(text "installing_go")..."
+    
+    local platform=$(detect_platform)
+    local os=$(echo "$platform" | cut -d'_' -f1)
+    local arch=$(echo "$platform" | cut -d'_' -f2)
+    
+    # Map architecture names to Go's naming convention
+    case "$arch" in
+        "amd64") arch="amd64" ;;
+        "arm64") arch="arm64" ;;
+        "386") arch="386" ;;
+        "armv6") arch="armv6l" ;;
+        "armv7") arch="armv6l" ;;
+        *) arch="amd64" ;;
+    esac
+    
+    # Get the latest Go version
+    print_info "$(text "downloading_go")..."
+    local go_version=$(curl -s https://golang.org/VERSION?m=text | head -n 1)
+    
+    if [[ -z "$go_version" ]]; then
+        go_version="go1.21.0"  # Fallback version
+    fi
+    
+    local go_url=""
+    local temp_dir=$(mktemp -d)
+    
+    if [[ "$os" == "windows" ]]; then
+        go_url="https://dl.google.com/go/${go_version}.windows-${arch}.zip"
+        curl -L -o "$temp_dir/go.zip" "$go_url"
+        unzip -q "$temp_dir/go.zip" -d "$temp_dir"
+        mv "$temp_dir/go" "$HOME/go"
+        rm -f "$temp_dir/go.zip"
+    else
+        go_url="https://dl.google.com/go/${go_version}.${os}-${arch}.tar.gz"
+        curl -L -o "$temp_dir/go.tar.gz" "$go_url"
+        tar -xzf "$temp_dir/go.tar.gz" -C "$temp_dir"
+        mv "$temp_dir/go" "$HOME/go"
+        rm -f "$temp_dir/go.tar.gz"
+    fi
+    
+    # Add Go to PATH
+    export GOROOT="$HOME/go"
+    export PATH="$GOROOT/bin:$PATH"
+    
+    # Add to shell profile
+    if [[ -f "$HOME/.bashrc" ]]; then
+        echo "export GOROOT=\"$HOME/go\"" >> "$HOME/.bashrc"
+        echo "export PATH=\"\$GOROOT/bin:\$PATH\"" >> "$HOME/.bashrc"
+    fi
+    
+    if [[ -f "$HOME/.zshrc" ]]; then
+        echo "export GOROOT=\"$HOME/go\"" >> "$HOME/.zshrc"
+        echo "export PATH=\"\$GOROOT/bin:\$PATH\"" >> "$HOME/.zshrc"
+    fi
+    
+    rm -rf "$temp_dir"
+    print_success "$(text "go_install_success")"
 }
 
 build_from_source() {
@@ -806,16 +889,11 @@ main() {
     show_progress 4 5 "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Đang cài đặt"; else echo "Installing"; fi)"
     
     if ! check_go_installation; then
-        if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
-            print_error "Go không được tìm thấy. Vui lòng cài đặt Go từ https://golang.org/dl/"
-        else
-            print_error "Go not found. Please install Go from https://golang.org/dl/"
-        fi
-        exit 1
-    else
-        print_info "$(text "building_source")..."
-        build_from_source
+        install_go
     fi
+    
+    print_info "$(text "building_source")..."
+    build_from_source
     
     # Final setup
     show_progress 5 5 "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Hoàn tất"; else echo "Finalizing"; fi)"
