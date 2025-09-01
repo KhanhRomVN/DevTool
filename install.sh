@@ -447,14 +447,26 @@ read_input() {
 }
 
 check_go_installation() {
-    if command -v go >/dev/null 2>&1; then
-        local go_version=$(go version | awk '{print $3}' | sed 's/go//')
-        print_success "$(text "go_found"): version $go_version"
-        return 0
-    else
-        print_warning "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Go chưa được cài đặt trên hệ thống này"; else echo "Go is not installed on this system"; fi)"
-        return 1
-    fi
+    # Check multiple possible locations for Go
+    local go_locations=(
+        "$(command -v go 2>/dev/null)"
+        "$HOME/go/bin/go"
+        "/usr/local/go/bin/go"
+        "/usr/bin/go"
+    )
+    
+    for go_bin in "${go_locations[@]}"; do
+        if [[ -x "$go_bin" ]] && "$go_bin" version >/dev/null 2>&1; then
+            local go_version=$("$go_bin" version | awk '{print $3}' | sed 's/go//')
+            print_success "$(text "go_found"): version $go_version"
+            export GOROOT=$("$go_bin" env GOROOT 2>/dev/null || dirname "$(dirname "$go_bin")")
+            export PATH="$GOROOT/bin:$PATH"
+            return 0
+        fi
+    done
+    
+    print_warning "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Go chưa được cài đặt trên hệ thống này"; else echo "Go is not installed on this system"; fi)"
+    return 1
 }
 
 
