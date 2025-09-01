@@ -1010,11 +1010,138 @@ func TestAPIKey(account config.Account) {
 		account.Email)
 }
 
-func ShowConfigurationInterface(cfg config.Config) config.Config {
-	// Implementation for showing configuration interface
-	messages.PrintHeader("⚙️ Configuration", "CYAN")
-	// Add your configuration interface logic here
+func changeUILanguage(cfg config.Config, reader *bufio.Reader) config.Config {
+	fmt.Println("\n" + messages.GetMessage("available_langs", cfg))
+	fmt.Println("1. " + messages.GetMessage("lang_1", cfg))
+	fmt.Println("2. " + messages.GetMessage("lang_2", cfg))
+
+	fmt.Print("\n" + messages.GetMessage("select_lang", cfg) + " (1-2): ")
+	langChoice, _ := reader.ReadString('\n')
+	langChoice = strings.TrimSpace(langChoice)
+
+	switch langChoice {
+	case "1":
+		cfg.UILanguage = "en"
+	case "2":
+		cfg.UILanguage = "vi"
+	default:
+		messages.PrintError(messages.GetMessage("invalid_choice", cfg))
+		return cfg
+	}
+
+	messages.PrintSuccess(fmt.Sprintf("UI Language changed to %s", cfg.UILanguage))
 	return cfg
+}
+
+func changeCommitLanguage(cfg config.Config, reader *bufio.Reader) config.Config {
+	fmt.Println("\n" + messages.GetMessage("available_langs", cfg))
+	fmt.Println("1. " + messages.GetMessage("lang_1", cfg))
+	fmt.Println("2. " + messages.GetMessage("lang_2", cfg))
+
+	fmt.Print("\n" + messages.GetMessage("select_lang", cfg) + " (1-2): ")
+	langChoice, _ := reader.ReadString('\n')
+	langChoice = strings.TrimSpace(langChoice)
+
+	switch langChoice {
+	case "1":
+		cfg.CommitLanguage = "en"
+	case "2":
+		cfg.CommitLanguage = "vi"
+	default:
+		messages.PrintError(messages.GetMessage("invalid_choice", cfg))
+		return cfg
+	}
+
+	messages.PrintSuccess(fmt.Sprintf("Commit Language changed to %s", cfg.CommitLanguage))
+	return cfg
+}
+
+func changeCommitStyle(cfg config.Config, reader *bufio.Reader) config.Config {
+	fmt.Println("\n" + messages.GetMessage("available_styles", cfg))
+	fmt.Println("1. Conventional Commits")
+	fmt.Println("2. Emoji Style")
+	fmt.Println("3. Descriptive")
+
+	fmt.Print("\n" + messages.GetMessage("select_style", cfg) + " (1-3): ")
+	styleChoice, _ := reader.ReadString('\n')
+	styleChoice = strings.TrimSpace(styleChoice)
+
+	styles := map[string]string{
+		"1": "conventional",
+		"2": "emoji",
+		"3": "descriptive",
+	}
+
+	if newStyle, ok := styles[styleChoice]; ok {
+		cfg.CommitStyle = newStyle
+		messages.PrintSuccess(fmt.Sprintf("Commit style changed to: %s", newStyle))
+	} else {
+		messages.PrintError(messages.GetMessage("invalid_choice", cfg))
+	}
+
+	return cfg
+}
+
+func ShowConfigurationInterface(cfg config.Config) config.Config {
+	reader := bufio.NewReader(os.Stdin)
+
+	for {
+		messages.PrintHeader("⚙️  "+messages.GetMessage("edit_config", cfg), "CYAN")
+
+		options := []string{
+			"1. " + messages.GetMessage("change_ui_lang", cfg),
+			"2. " + messages.GetMessage("change_commit_lang", cfg),
+			"3. " + messages.GetMessage("change_ai_model", cfg),
+			"4. " + messages.GetMessage("change_commit_style", cfg),
+			"5. " + messages.GetMessage("toggle_auto_push", cfg),
+			"6. " + messages.GetMessage("toggle_auto_stage", cfg),
+			"0. " + messages.GetMessage("back_to_menu", cfg),
+		}
+
+		for _, option := range options {
+			fmt.Println(option)
+		}
+
+		fmt.Print("\n" + messages.GetMessage("select_option", cfg) + " (0-6): ")
+		choice, _ := reader.ReadString('\n')
+		choice = strings.TrimSpace(choice)
+
+		switch choice {
+		case "1":
+			cfg = changeUILanguage(cfg, reader)
+		case "2":
+			cfg = changeCommitLanguage(cfg, reader)
+		case "3":
+			cfg = changeAIModel(cfg, reader)
+		case "4":
+			cfg = changeCommitStyle(cfg, reader)
+		case "5":
+			cfg.AutoPush = !cfg.AutoPush
+			status := messages.GetMessage("disabled", cfg)
+			if cfg.AutoPush {
+				status = messages.GetMessage("enabled", cfg)
+			}
+			messages.PrintSuccess(fmt.Sprintf("Auto Push %s", status))
+		case "6":
+			cfg.AutoStage = !cfg.AutoStage
+			status := messages.GetMessage("disabled", cfg)
+			if cfg.AutoStage {
+				status = messages.GetMessage("enabled", cfg)
+			}
+			messages.PrintSuccess(fmt.Sprintf("Auto Stage %s", status))
+		case "0":
+			return cfg
+		default:
+			messages.PrintError(messages.GetMessage("invalid_option", cfg))
+		}
+
+		fmt.Println("\n" + messages.GetMessage("press_enter_continue", cfg))
+		reader.ReadString('\n')
+	}
+}
+
+func changeAIModel(cfg config.Config, reader *bufio.Reader) config.Config {
+	panic("unimplemented")
 }
 
 // ConfirmAction prompts for user confirmation
