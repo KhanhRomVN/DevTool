@@ -457,7 +457,7 @@ check_go_installation() {
     fi
 }
 
-# Function to install Go automatically
+
 install_go() {
     print_step "$(text "installing_go")..."
     
@@ -513,26 +513,52 @@ install_go() {
         rm -f "$temp_dir/go.tar.gz"
     fi
     
-    # Add Go to PATH
+    # Add Go to PATH and set environment variables
     export GOROOT="$HOME/go"
+    export GOPATH="$HOME/go"
+    export GOMODCACHE="$GOPATH/pkg/mod"
     export PATH="$GOROOT/bin:$PATH"
     
     # Add to shell profile
     if [[ -f "$HOME/.bashrc" ]]; then
         echo "export GOROOT=\"$HOME/go\"" >> "$HOME/.bashrc"
+        echo "export GOPATH=\"$HOME/go\"" >> "$HOME/.bashrc"
+        echo "export GOMODCACHE=\"\$GOPATH/pkg/mod\"" >> "$HOME/.bashrc"
         echo "export PATH=\"\$GOROOT/bin:\$PATH\"" >> "$HOME/.bashrc"
     fi
     
     if [[ -f "$HOME/.zshrc" ]]; then
         echo "export GOROOT=\"$HOME/go\"" >> "$HOME/.zshrc"
+        echo "export GOPATH=\"$HOME/go\"" >> "$HOME/.zshrc"
+        echo "export GOMODCACHE=\"\$GOPATH/pkg/mod\"" >> "$HOME/.zshrc"
         echo "export PATH=\"\$GOROOT/bin:\$PATH\"" >> "$HOME/.zshrc"
+    fi
+    
+    # Also add to Windows-specific profiles
+    if is_windows; then
+        if [[ -f "$HOME/.bash_profile" ]]; then
+            echo "export GOROOT=\"$HOME/go\"" >> "$HOME/.bash_profile"
+            echo "export GOPATH=\"$HOME/go\"" >> "$HOME/.bash_profile"
+            echo "export GOMODCACHE=\"\$GOPATH/pkg/mod\"" >> "$HOME/.bash_profile"
+            echo "export PATH=\"\$GOROOT/bin:\$PATH\"" >> "$HOME/.bash_profile"
+        fi
     fi
     
     rm -rf "$temp_dir"
     print_success "$(text "go_install_success")"
 }
+
 build_from_source() {
     print_step "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Đang build $TOOL_NAME từ mã nguồn"; else echo "Building $TOOL_NAME from source"; fi)..."
+    
+    # Verify Go environment is set
+    if [[ -z "$GOROOT" ]] || [[ -z "$GOPATH" ]]; then
+        print_warning "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Biến môi trường Go chưa được thiết lập, đang thiết lập..."; else echo "Go environment variables not set, setting up..."; fi)"
+        export GOROOT="$HOME/go"
+        export GOPATH="$HOME/go"
+        export GOMODCACHE="$GOPATH/pkg/mod"
+        export PATH="$GOROOT/bin:$PATH"
+    fi
     
     local temp_dir=$(mktemp -d)
     cd "$temp_dir"
