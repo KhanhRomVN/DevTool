@@ -1141,7 +1141,47 @@ func ShowConfigurationInterface(cfg config.Config) config.Config {
 }
 
 func changeAIModel(cfg config.Config, reader *bufio.Reader) config.Config {
-	panic("unimplemented")
+	// Get primary account
+	primaryAccount := config.GetPrimaryAccountWithFallback(cfg)
+	if primaryAccount == nil {
+		messages.PrintError(messages.GetMessage("no_accounts", cfg))
+		return cfg
+	}
+
+	fmt.Println("\n" + messages.GetMessage("available_models", cfg))
+	for i, model := range config.GeminiModels {
+		currentIndicator := ""
+		if model == primaryAccount.Model {
+			currentIndicator = " (" + messages.GetMessage("current", cfg) + ")"
+		}
+		fmt.Printf("%d. %s%s\n", i+1, model, currentIndicator)
+	}
+
+	var modelChoice int
+	for {
+		fmt.Printf("\n%s%s (1-%d): %s", Colors["BOLD"].Sprint(), messages.GetMessage("select_model", cfg), len(config.GeminiModels), Colors["END"].Sprint())
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
+		choice, err := strconv.Atoi(input)
+		if err == nil && choice >= 1 && choice <= len(config.GeminiModels) {
+			modelChoice = choice
+			break
+		}
+		messages.PrintError(messages.GetMessage("invalid_choice", cfg))
+	}
+
+	selectedModel := config.GeminiModels[modelChoice-1]
+
+	// Update the primary account's model
+	for i := range cfg.Accounts {
+		if cfg.Accounts[i].Email == primaryAccount.Email {
+			cfg.Accounts[i].Model = selectedModel
+			break
+		}
+	}
+
+	messages.PrintSuccess(fmt.Sprintf("Model updated to: %s", selectedModel))
+	return cfg
 }
 
 // ConfirmAction prompts for user confirmation
