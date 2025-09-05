@@ -25,6 +25,16 @@ VERSION_URL="https://raw.githubusercontent.com/KhanhRomVN/dev_tool/main/VERSION"
 INSTALL_SCRIPT_URL="https://raw.githubusercontent.com/KhanhRomVN/dev_tool/main/install.sh"
 CHECK_UPDATE_SCRIPT_URL="https://raw.githubusercontent.com/KhanhRomVN/dev_tool/main/check_update.sh"
 
+# Get config directory
+get_config_dir() {
+    case "$(uname -s)" in
+        Linux*)     echo "$HOME/.config/dev_tool" ;;
+        Darwin*)    echo "$HOME/Library/Application Support/dev_tool" ;;
+        CYGWIN*|MINGW*|MSYS*)   echo "$APPDATA/dev_tool" ;;
+        *)          echo "$HOME/.config/dev_tool" ;;
+    esac
+}
+
 # Get current version
 get_current_version() {
     if command -v "$TOOL_NAME" >/dev/null 2>&1; then
@@ -83,46 +93,14 @@ check_for_updates() {
     fi
 }
 
-# Run update check via curl (remote execution)
-run_remote_update_check() {
-    if command -v curl >/dev/null 2>&1; then
-        curl -fsSL "$CHECK_UPDATE_SCRIPT_URL" | bash -s -- --check-only
-    elif command -v wget >/dev/null 2>&1; then
-        wget -qO- "$CHECK_UPDATE_SCRIPT_URL" | bash -s -- --check-only
-    fi
-}
-
-# Prompt user for update
-prompt_update() {
-    local latest_version="$1"
-    local current_version=$(get_current_version)
+# Save update status to file
+save_update_status() {
+    local status="$1"
+    local config_dir=$(get_config_dir)
+    local status_file="$config_dir/update_check"
     
-    echo -e "${YELLOW}${BOLD}🔄 Update Available!${RESET}"
-    echo -e "${WHITE}Current version: ${current_version}${RESET}"
-    echo -e "${WHITE}Latest version:  ${latest_version}${RESET}"
-    echo ""
-    echo -e "${CYAN}Would you like to update now? (y/N): ${RESET}"
-    
-    read -r response
-    case "$response" in
-        [yY][eE][sS]|[yY])
-            echo -e "${GREEN}Updating to version ${latest_version}...${RESET}"
-            
-            # Download and run install script via curl
-            if command -v curl >/dev/null 2>&1; then
-                curl -fsSL "$INSTALL_SCRIPT_URL" | bash -s -- --update
-            elif command -v wget >/dev/null 2>&1; then
-                wget -qO- "$INSTALL_SCRIPT_URL" | bash -s -- --update
-            else
-                echo -e "${RED}Error: Neither curl nor wget found. Please update manually.${RESET}"
-                return 1
-            fi
-            ;;
-        *)
-            echo -e "${BLUE}Skipping update. You can update later by running:${RESET}"
-            echo -e "${WHITE}curl -fsSL $INSTALL_SCRIPT_URL | bash${RESET}"
-            ;;
-    esac
+    mkdir -p "$config_dir"
+    echo "$status" > "$status_file"
 }
 
 # Check-only mode (for remote execution)
@@ -130,11 +108,31 @@ check_only_mode() {
     local latest_version=$(check_for_updates)
     
     if [ -n "$latest_version" ]; then
+        save_update_status "UPDATE_AVAILABLE:$latest_version"
         echo "UPDATE_AVAILABLE:$latest_version"
     else
+        save_update_status "UP_TO_DATE"
         echo "UP_TO_DATE"
     fi
     exit 0
+}
+
+# Update mode
+update_mode() {
+    echo -e "${GREEN}Updating dev_tool...${RESET}"
+    
+    # Download and run install script
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$INSTALL_SCRIPT_URL" | bash -s -- --update
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO- "$INSTALL_SCRIPT_URL" | bash -s -- --update
+    else
+        echo -e "${RED}Error: Neither curl nor wget found. Please update manually.${RESET}"
+        return 1
+    fi
+    
+    # Clear update status after successful update
+    save_update_status "UP_TO_DATE"
 }
 
 # Main function
@@ -142,6 +140,12 @@ main() {
     # Handle check-only mode (for remote execution)
     if [ "$1" = "--check-only" ]; then
         check_only_mode
+    fi
+    
+    # Handle update mode
+    if [ "$1" = "--update" ]; then
+        update_mode
+        exit 0
     fi
     
     # Only check for updates once per day
@@ -165,8 +169,25 @@ main() {
     local latest_version=$(check_for_updates)
     
     if [ -n "$latest_version" ]; then
-        prompt_update "$latest_version"
+        save_update_status "UPDATE_AVAILABLE:$latest_version"
+        echo -e "${YELLOW}${BOLD}🔄 Update Available!${RESET}"
+        echo -e "${WHITE}Current version: $(get_current_version)${RESET}"
+        echo -e "${WHITE}Latest version:  ${latest_version}${RESET}"
+        echo ""
+        echo -e "${CYAN}Would you like to update now? (y/N): ${RESET}"
+        
+        read -r response
+        case "$response" in
+            [yY][eE][sS]|[yY])
+                update_mode
+                ;;
+            *)
+                echo -e "${BLUE}Skipping update. You can update later by running:${RESET}"
+                echo -e "${WHITE}dev_tool update${RESET}"
+                ;;
+        esac
     else
+        save_update_status "UP_TO_DATE"
         echo -e "${GREEN}✅ Your dev_tool is up to date!${RESET}"
     fi
 }

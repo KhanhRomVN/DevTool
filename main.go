@@ -1,4 +1,4 @@
-// main.go - Enhanced version with API key rotation support and auto-update check
+// main.go - Enhanced version with auto-update check on all commands
 package main
 
 import (
@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"dev_tool/ai"
 	"dev_tool/config"
@@ -19,12 +21,13 @@ import (
 )
 
 var (
-	version = "2.1.1"
+	version         = "2.1.1"
+	lastUpdateCheck time.Time
 )
 
 func main() {
-	// Check for updates in background (non-blocking)
-	go checkForUpdates()
+	// Check for updates in background for all commands
+	go checkForUpdatesBackground()
 
 	var rootCmd = &cobra.Command{
 		Use:   "dev_tool",
@@ -57,13 +60,18 @@ Features:
 			// For any other arguments, show help
 			cmd.Help()
 		},
+		PostRun: func(cmd *cobra.Command, args []string) {
+			// Show update notification after every command
+			showUpdateNotificationIfNeeded()
+		},
 	}
 
 	rootCmd.AddCommand(
 		newAutoCommitCmd(),
 		newSettingsCmd(),
 		newDotCmd(),
-		newAccountCmd(), // New account management command
+		newAccountCmd(),
+		newUpdateCmd(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {
@@ -72,14 +80,92 @@ Features:
 	}
 }
 
-func checkForUpdates() {
+func checkForUpdatesBackground() {
+	// Only check once per day
+	if time.Since(lastUpdateCheck) < 24*time.Hour {
+		return
+	}
+
+	lastUpdateCheck = time.Now()
+
 	// Run the update checker via curl in background (non-blocking)
 	if runtime.GOOS == "windows" {
-		cmd := exec.Command("cmd", "/C", "start", "/B", "curl", "-fsSL", "https://raw.githubusercontent.com/KhanhRomVN/dev_tool/main/check_update.sh", "|", "bash")
+		cmd := exec.Command("cmd", "/C", "start", "/B", "curl", "-fsSL", "https://raw.githubusercontent.com/KhanhRomVN/dev_tool/main/check_update.sh", "|", "bash", "--silent", "--check-only")
 		cmd.Start()
 	} else {
-		cmd := exec.Command("bash", "-c", "curl -fsSL https://raw.githubusercontent.com/KhanhRomVN/dev_tool/main/check_update.sh | bash --silent")
+		cmd := exec.Command("bash", "-c", "curl -fsSL https://raw.githubusercontent.com/KhanhRomVN/dev_tool/main/check_update.sh | bash --silent --check-only")
 		cmd.Start()
+	}
+}
+
+func showUpdateNotificationIfNeeded() {
+	// Check if update notification file exists
+	updateFile := getUpdateCheckFilePath()
+	if _, err := os.Stat(updateFile); os.IsNotExist(err) {
+		return
+	}
+
+	// Read update info
+	data, err := os.ReadFile(updateFile)
+	if err != nil {
+		return
+	}
+
+	content := strings.TrimSpace(string(data))
+	if strings.HasPrefix(content, "UPDATE_AVAILABLE:") {
+		latestVersion := strings.TrimPrefix(content, "UPDATE_AVAILABLE:")
+		fmt.Printf("\n%s%s %s %s%s\n",
+			ui.Colors["YELLOW"].Sprint(""),
+			"🔄",
+			"Update available:",
+			latestVersion,
+			ui.Colors["END"].Sprint(""))
+		fmt.Printf("%sRun '%s' to update%s\n",
+			ui.Colors["CYAN"].Sprint(""),
+			"dev_tool update",
+			ui.Colors["END"].Sprint(""))
+	}
+}
+
+func getUpdateCheckFilePath() string {
+	configDir := config.GetConfigDir()
+	return filepath.Join(configDir, "update_check")
+}
+
+func newUpdateCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "update",
+		Short: "Update dev_tool to the latest version",
+		Long: `Update dev_tool to the latest version from GitHub.
+
+This command will:
+1. Download the latest install script from GitHub
+2. Run the installation process
+3. Update to the newest version automatically`,
+		Run: func(cmd *cobra.Command, args []string) {
+			updateTool()
+		},
+	}
+}
+
+func updateTool() {
+	fmt.Println("🔄 Checking for updates...")
+
+	// Run update script
+	if runtime.GOOS == "windows" {
+		cmd := exec.Command("cmd", "/C", "curl", "-fsSL", "https://raw.githubusercontent.com/KhanhRomVN/dev_tool/main/install.sh", "|", "bash", "--update")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("❌ Update failed: %v\n", err)
+		}
+	} else {
+		cmd := exec.Command("bash", "-c", "curl -fsSL https://raw.githubusercontent.com/KhanhRomVN/dev_tool/main/install.sh | bash --update")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("❌ Update failed: %v\n", err)
+		}
 	}
 }
 
@@ -150,7 +236,7 @@ func newSettingsCmd() *cobra.Command {
 	}
 }
 
-// New account management command
+// Account management command
 func newAccountCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "accounts",

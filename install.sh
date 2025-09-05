@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Dev Tool - AI-powered Git Commit Message Generator
-# Enhanced Cross-platform installer with bilingual support
+# Enhanced Cross-platform installer with bilingual support and update functionality
 # Developer: KhanhRomVN
 # Repository: https://github.com/KhanhRomVN/dev_tool
 # Contact: khanhromvn@gmail.com
@@ -29,10 +29,60 @@ BINARY_NAME="dev_tool"
 DEVELOPER="KhanhRomVN"
 CONTACT="khanhromvn@gmail.com"
 
+# Installation modes
+UPDATE_MODE=false
+
 # Language support
 LANG_EN="en"
 LANG_VI="vi"
 CURRENT_LANG="$LANG_EN"
+
+# Process command line arguments
+process_arguments() {
+    for arg in "$@"
+    do
+        case $arg in
+            --update)
+                UPDATE_MODE=true
+                shift
+                ;;
+            --uninstall)
+                uninstall
+                exit 0
+                ;;
+            --help|--guide)
+                show_help
+                exit 0
+                ;;
+            *)
+                # Unknown option
+                ;;
+        esac
+    done
+}
+
+# Show help function
+show_help() {
+    echo -e "${CYAN}${BOLD}Dev Tool Installer${RESET}"
+    echo ""
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo -e "  ${GREEN}--update${RESET}      Update existing installation to version $VERSION"
+    echo -e "  ${GREEN}--uninstall${RESET}   Remove dev_tool from system"
+    echo -e "  ${GREEN}--help${RESET}        Show this help message"
+    echo -e "  ${GREEN}--guide${RESET}       Show detailed command guide"
+    echo ""
+    echo "Examples:"
+    echo -e "  ${DIM}./install.sh${RESET}           # Fresh installation"
+    echo -e "  ${DIM}./install.sh --update${RESET}   # Update existing installation"
+    echo -e "  ${DIM}./install.sh --help${RESET}     # Show this help"
+    echo ""
+    echo "Environment variables:"
+    echo -e "  ${YELLOW}DEV_TOOL_LANG${RESET}       Set language (en|vi)"
+    echo ""
+    echo "For more information, visit: $REPO_URL"
+}
 
 # Language detection
 detect_language() {
@@ -73,6 +123,41 @@ text() {
                 echo "Phát triển bởi: $DEVELOPER"
             else
                 echo "Developed by: $DEVELOPER"
+            fi
+            ;;
+        "update_mode_title")
+            if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+                echo "CẬP NHẬT DEV TOOL"
+            else
+                echo "UPDATE DEV TOOL"
+            fi
+            ;;
+        "update_checking")
+            if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+                echo "Kiểm tra phiên bản hiện tại"
+            else
+                echo "Checking current version"
+            fi
+            ;;
+        "update_from_to")
+            if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+                echo "Cập nhật từ phiên bản $1 lên $2"
+            else
+                echo "Updating from version $1 to $2"
+            fi
+            ;;
+        "update_same_version")
+            if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+                echo "Đã có phiên bản mới nhất ($1)"
+            else
+                echo "Already running latest version ($1)"
+            fi
+            ;;
+        "update_success")
+            if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+                echo "Cập nhật thành công!"
+            else
+                echo "Update completed successfully!"
             fi
             ;;
         
@@ -282,8 +367,13 @@ print_header() {
     echo -e "${CYAN}${BOLD}"
     echo "╔══════════════════════════════════════════════════════════════════════════════╗"
     echo "║                                                                              ║"
-    echo "║                          🛠️  $(text "header_title")                           ║"
-    echo "║                        $(text "header_subtitle")                        ║"
+    if [[ "$UPDATE_MODE" == true ]]; then
+        echo "║                          🔄  $(text "update_mode_title")                          ║"
+        echo "║                        $(text "header_subtitle")                        ║"
+    else
+        echo "║                          🛠️  $(text "header_title")                           ║"
+        echo "║                        $(text "header_subtitle")                        ║"
+    fi
     echo "║                                                                              ║"
     echo "║  $(text "header_developer")                                                    ║"
     echo "║  📧 Email: $CONTACT                                           ║"
@@ -468,7 +558,6 @@ check_go_installation() {
     print_warning "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Go chưa được cài đặt trên hệ thống này"; else echo "Go is not installed on this system"; fi)"
     return 1
 }
-
 
 install_go() {
     print_step "$(text "installing_go")..."
@@ -669,6 +758,57 @@ check_requirements() {
     print_success "$(text "requirements_passed")"
 }
 
+# Get current installed version
+get_current_version() {
+    local binary_name="$BINARY_NAME"
+    if is_windows && command -v "${BINARY_NAME}.exe" >/dev/null 2>&1; then
+        binary_name="${BINARY_NAME}.exe"
+    fi
+    
+    if command -v "$binary_name" >/dev/null 2>&1; then
+        "$binary_name" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1
+    else
+        echo ""
+    fi
+}
+
+# Update mode function
+update_existing_installation() {
+    print_step "$(text "update_checking")..."
+    
+    local current_version=$(get_current_version)
+    
+    if [[ -z "$current_version" ]]; then
+        print_warning "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Không thể xác định phiên bản hiện tại. Tiến hành cài đặt mới"; else echo "Cannot determine current version. Proceeding with fresh installation"; fi)."
+        UPDATE_MODE=false
+        return 1
+    fi
+    
+    print_info "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Phiên bản hiện tại"; else echo "Current version"; fi): $current_version"
+    print_info "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Phiên bản mới"; else echo "New version"; fi): $VERSION"
+    
+    # Simple version comparison
+    if [[ "$current_version" == "$VERSION" ]]; then
+        print_warning "$(text "update_same_version" "$current_version")"
+        
+        local force_update=""
+        if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+            force_update=$(read_input "Bạn có muốn cài đặt lại? (y/n) [n]: " "n")
+        else
+            force_update=$(read_input "Do you want to reinstall anyway? (y/n) [n]: " "n")
+        fi
+        
+        if [[ "$force_update" != "y" ]] && [[ "$force_update" != "yes" ]]; then
+            print_info "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Hủy cập nhật"; else echo "Update cancelled"; fi)."
+            exit 0
+        fi
+    else
+        print_info "$(text "update_from_to" "$current_version" "$VERSION")"
+    fi
+    
+    return 0
+}
+
 post_install_setup() {
     print_info "$(text "post_install")..."
     
@@ -806,10 +946,18 @@ show_progress() {
 show_installation_summary() {
     echo ""
     echo -e "${WHITE}${BOLD}╔══════════════════════════════════════════════════════════════════════════════╗${RESET}"
-    if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
-        echo -e "${WHITE}${BOLD}║                           📋 TÓM TẮT CÀI ĐẶT                                ║${RESET}"
+    if [[ "$UPDATE_MODE" == true ]]; then
+        if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+            echo -e "${WHITE}${BOLD}║                           📋 TÓM TẮT CẬP NHẬT                               ║${RESET}"
+        else
+            echo -e "${WHITE}${BOLD}║                            📋 UPDATE SUMMARY                               ║${RESET}"
+        fi
     else
-        echo -e "${WHITE}${BOLD}║                          📋 INSTALLATION SUMMARY                            ║${RESET}"
+        if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+            echo -e "${WHITE}${BOLD}║                           📋 TÓM TẮT CÀI ĐẶT                                ║${RESET}"
+        else
+            echo -e "${WHITE}${BOLD}║                          📋 INSTALLATION SUMMARY                            ║${RESET}"
+        fi
     fi
     echo -e "${WHITE}${BOLD}╚══════════════════════════════════════════════════════════════════════════════╝${RESET}"
     echo ""
@@ -823,13 +971,21 @@ show_installation_summary() {
         local final_version=$("$final_binary" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "$VERSION")
         
         if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
-            echo -e "${GREEN}✅ Trạng thái:${RESET}        Cài đặt thành công"
+            if [[ "$UPDATE_MODE" == true ]]; then
+                echo -e "${GREEN}✅ Trạng thái:${RESET}        Cập nhật thành công"
+            else
+                echo -e "${GREEN}✅ Trạng thái:${RESET}        Cài đặt thành công"
+            fi
             echo -e "${BLUE}📦 Phiên bản:${RESET}         $final_version"
             echo -e "${CYAN}📁 Vị trí:${RESET}            $(which "$final_binary")"
             echo -e "${YELLOW}🛠️  Công cụ:${RESET}           $TOOL_NAME"
             echo -e "${MAGENTA}👨‍💻 Nhà phát triển:${RESET}    $DEVELOPER"
         else
-            echo -e "${GREEN}✅ Status:${RESET}            Successfully installed"
+            if [[ "$UPDATE_MODE" == true ]]; then
+                echo -e "${GREEN}✅ Status:${RESET}            Successfully updated"
+            else
+                echo -e "${GREEN}✅ Status:${RESET}            Successfully installed"
+            fi
             echo -e "${BLUE}📦 Version:${RESET}           $final_version"
             echo -e "${CYAN}📁 Location:${RESET}          $(which "$final_binary")"
             echo -e "${YELLOW}🛠️  Tool:${RESET}             $TOOL_NAME"
@@ -837,11 +993,19 @@ show_installation_summary() {
         fi
     else
         if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
-            echo -e "${YELLOW}⚠️  Trạng thái:${RESET}        Cài đặt hoàn tất, cần xác minh"
+            if [[ "$UPDATE_MODE" == true ]]; then
+                echo -e "${YELLOW}⚠️  Trạng thái:${RESET}        Cập nhật hoàn tất, cần xác minh"
+            else
+                echo -e "${YELLOW}⚠️  Trạng thái:${RESET}        Cài đặt hoàn tất, cần xác minh"
+            fi
             echo -e "${BLUE}📦 Phiên bản:${RESET}         $VERSION"
             echo -e "${CYAN}📁 Vị trí dự kiến:${RESET}    $(get_install_directory)/$BINARY_NAME"
         else
-            echo -e "${YELLOW}⚠️  Status:${RESET}            Installation complete, verification needed"
+            if [[ "$UPDATE_MODE" == true ]]; then
+                echo -e "${YELLOW}⚠️  Status:${RESET}            Update complete, verification needed"
+            else
+                echo -e "${YELLOW}⚠️  Status:${RESET}            Installation complete, verification needed"
+            fi
             echo -e "${BLUE}📦 Version:${RESET}           $VERSION"
             echo -e "${CYAN}📁 Expected location:${RESET} $(get_install_directory)/$BINARY_NAME"
         fi
@@ -866,26 +1030,25 @@ show_installation_summary() {
 
 # Enhanced main installation function
 main() {
+    # Process command line arguments first
+    process_arguments "$@"
+    
     # Detect and optionally change language
     detect_language
     
-    # Show language selection if not explicitly set
-    if [[ -z "$DEV_TOOL_LANG" ]]; then
+    # Show language selection if not explicitly set and not in update mode
+    if [[ -z "$DEV_TOOL_LANG" ]] && [[ "$UPDATE_MODE" == false ]]; then
         show_language_menu
     fi
     
     print_header
     
-    # Check for uninstall flag
-    if [[ "$1" == "--uninstall" ]]; then
-        uninstall
-        exit 0
-    fi
-    
-    # Show command guide if requested
-    if [[ "$1" == "--help" ]] || [[ "$1" == "--guide" ]]; then
-        show_command_guide
-        exit 0
+    # Handle update mode
+    if [[ "$UPDATE_MODE" == true ]]; then
+        if ! update_existing_installation; then
+            # Fall back to normal installation if update fails
+            UPDATE_MODE=false
+        fi
     fi
     
     # Platform detection with progress
@@ -901,42 +1064,54 @@ main() {
     show_progress 2 5 "$(text "checking_requirements")"
     check_requirements
     
-    # Check if already installed
+    # Check if already installed (skip if in update mode)
     show_progress 3 5 "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Kiểm tra cài đặt hiện tại"; else echo "Checking current installation"; fi)"
-    local tool_exists=false
-    if command -v "$BINARY_NAME" >/dev/null 2>&1; then
-        tool_exists=true
-    elif is_windows && command -v "${BINARY_NAME}.exe" >/dev/null 2>&1; then
-        tool_exists=true
-        BINARY_NAME="${BINARY_NAME}.exe"
-    fi
-    
-    if $tool_exists; then
-        local current_version=$("$BINARY_NAME" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown")
-        
-        if [[ -z "$current_version" ]]; then
-            current_version=$("$BINARY_NAME" --version 2>/dev/null || echo "unknown")
-            current_version=$(echo "$current_version" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    if [[ "$UPDATE_MODE" == false ]]; then
+        local tool_exists=false
+        if command -v "$BINARY_NAME" >/dev/null 2>&1; then
+            tool_exists=true
+        elif is_windows && command -v "${BINARY_NAME}.exe" >/dev/null 2>&1; then
+            tool_exists=true
+            BINARY_NAME="${BINARY_NAME}.exe"
         fi
         
-        if [[ -z "$current_version" ]]; then
-            current_version="unknown"
-        fi
-        
-        if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
-            print_warning "$TOOL_NAME đã được cài đặt (phiên bản: $current_version)"
-            print_info "Đang tiến hành cài đặt lại với phiên bản $VERSION"
+        if $tool_exists; then
+            local current_version=$("$BINARY_NAME" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "unknown")
+            
+            if [[ -z "$current_version" ]]; then
+                current_version=$("$BINARY_NAME" --version 2>/dev/null || echo "unknown")
+                current_version=$(echo "$current_version" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+            fi
+            
+            if [[ -z "$current_version" ]]; then
+                current_version="unknown"
+            fi
+            
+            if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+                print_warning "$TOOL_NAME đã được cài đặt (phiên bản: $current_version)"
+                print_info "Đang tiến hành cài đặt lại với phiên bản $VERSION"
+            else
+                print_warning "$TOOL_NAME is already installed (version: $current_version)"
+                print_info "Proceeding with reinstallation of version $VERSION"
+            fi
         else
-            print_warning "$TOOL_NAME is already installed (version: $current_version)"
-            print_info "Proceeding with reinstallation of version $VERSION"
+            print_info "$(text "not_installed")."
+            print_info "$(text "installing_version")..."
         fi
     else
-        print_info "$(text "not_installed")."
-        print_info "$(text "installing_version")..."
+        if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+            print_info "Chế độ cập nhật: Đang cập nhật lên phiên bản $VERSION"
+        else
+            print_info "Update mode: Updating to version $VERSION"
+        fi
     fi
     
     # Installation process
-    show_progress 4 5 "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Đang cài đặt"; else echo "Installing"; fi)"
+    show_progress 4 5 "$(if [[ "$UPDATE_MODE" == true ]]; then
+        if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Đang cập nhật"; else echo "Updating"; fi
+    else
+        if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Đang cài đặt"; else echo "Installing"; fi
+    fi)"
     
     if ! check_go_installation; then
         install_go
@@ -951,21 +1126,27 @@ main() {
     
     # Show success message
     echo ""
-    print_success "$(text "install_complete")"
+    if [[ "$UPDATE_MODE" == true ]]; then
+        print_success "$(text "update_success")"
+    else
+        print_success "$(text "install_complete")"
+    fi
     
     # Show installation summary
     show_installation_summary
     
-    # Show command guide
+    # Show command guide (skip for update mode unless explicitly requested)
     local show_guide=""
-    if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
-        show_guide=$(read_input "Bạn có muốn xem hướng dẫn sử dụng chi tiết? (y/n) [y]: " "y")
-    else
-        show_guide=$(read_input "Would you like to see the detailed command guide? (y/n) [y]: " "y")
-    fi
-    
-    if [[ "$show_guide" != "n" ]] && [[ "$show_guide" != "no" ]]; then
-        show_command_guide
+    if [[ "$UPDATE_MODE" == false ]]; then
+        if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+            show_guide=$(read_input "Bạn có muốn xem hướng dẫn sử dụng chi tiết? (y/n) [y]: " "y")
+        else
+            show_guide=$(read_input "Would you like to see the detailed command guide? (y/n) [y]: " "y")
+        fi
+        
+        if [[ "$show_guide" != "n" ]] && [[ "$show_guide" != "no" ]]; then
+            show_command_guide
+        fi
     fi
     
     # Final message
@@ -1004,10 +1185,18 @@ main() {
     
     # Thank you message
     echo ""
-    if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
-        print_highlight "🙏 Cảm ơn bạn đã sử dụng Dev Tool! Chúc bạn coding vui vẻ!"
+    if [[ "$UPDATE_MODE" == true ]]; then
+        if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+            print_highlight "🙏 Cảm ơn bạn đã cập nhật Dev Tool! Chúc bạn coding vui vẻ!"
+        else
+            print_highlight "🙏 Thank you for updating Dev Tool! Happy coding!"
+        fi
     else
-        print_highlight "🙏 Thank you for using Dev Tool! Happy coding!"
+        if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+            print_highlight "🙏 Cảm ơn bạn đã sử dụng Dev Tool! Chúc bạn coding vui vẻ!"
+        else
+            print_highlight "🙏 Thank you for using Dev Tool! Happy coding!"
+        fi
     fi
     echo ""
 }
