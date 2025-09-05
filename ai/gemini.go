@@ -55,9 +55,9 @@ func GenerateCommitMessage(diffText string, cfg config.Config) (string, error) {
 	return GenerateCommitMessageWithRetry(diffText, cfg.CommitStyle, cfg.CommitLanguage, cfg)
 }
 
-// GenerateCommitMessageWithRetry implements the retry logic with multiple API keys
+// Enhanced GenerateCommitMessageWithRetry with improved account rotation
 func GenerateCommitMessageWithRetry(diffText, commitStyle, commitLanguage string, cfg config.Config) (string, error) {
-	// Get all available API keys
+	// Get all available API keys from all accounts
 	availableKeys := config.GetAllAvailableAPIKeys(cfg)
 	if len(availableKeys) == 0 {
 		return "", fmt.Errorf("no active API keys available")
@@ -69,14 +69,50 @@ func GenerateCommitMessageWithRetry(diffText, commitStyle, commitLanguage string
 		maxRetries = 3
 	}
 
-	// Try each available API key
-	for _, keyInfo := range availableKeys {
-		account := keyInfo.Account
-		apiKey := keyInfo.APIKey
+	// Track which accounts and API keys we've tried
+	triedAccounts := make(map[string]bool)
+	triedAPIKeys := make(map[string]bool)
 
-		fmt.Printf("🔑 Trying API key: %s (%s)\n",
+	// Try all available API keys across all accounts
+	for attempt := 0; attempt < len(availableKeys)*maxRetries; attempt++ {
+		// Find the best available API key we haven't tried yet
+		var bestKeyInfo *struct {
+			Account *config.Account
+			APIKey  *config.APIKey
+		}
+
+		for i := range availableKeys {
+			keyInfo := &availableKeys[i]
+			keyID := keyInfo.APIKey.ID
+			accountEmail := keyInfo.Account.Email
+
+			// Skip if we've already tried this API key too many times
+			if triedAPIKeys[keyID] {
+				continue
+			}
+
+			// Prefer API keys from accounts we haven't tried yet
+			if bestKeyInfo == nil || !triedAccounts[accountEmail] {
+				bestKeyInfo = keyInfo
+			}
+		}
+
+		if bestKeyInfo == nil {
+			// All API keys have been tried
+			break
+		}
+
+		account := bestKeyInfo.Account
+		apiKey := bestKeyInfo.APIKey
+
+		// Mark this API key and account as tried
+		triedAPIKeys[apiKey.ID] = true
+		triedAccounts[account.Email] = true
+
+		fmt.Printf("🔑 Trying API key: %s (%s - %s)\n",
 			maskAPIKey(apiKey.Key),
-			apiKey.Description)
+			apiKey.Description,
+			account.Email)
 
 		for retry := 0; retry < maxRetries; retry++ {
 			if retry > 0 {
@@ -140,7 +176,7 @@ func GenerateCommitMessageWithRetry(diffText, commitStyle, commitLanguage string
 
 	// All API keys have been tried
 	if lastError != nil {
-		return "", fmt.Errorf("all API keys failed, last error: %v", lastError)
+		return "", fmt.Errorf("all API keys failed across %d accounts, last error: %v", len(triedAccounts), lastError)
 	}
 
 	return "", fmt.Errorf("no API keys available for use")

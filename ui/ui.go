@@ -81,8 +81,19 @@ func max(a, b int) int {
 	return b
 }
 
+// Enhanced ShowCurrentConfig to display account information
 func ShowCurrentConfig(cfg config.Config) {
 	messages.PrintSection(messages.GetMessage("current_config", cfg), "PURPLE")
+
+	// Count active accounts and API keys
+	activeAccounts := 0
+	activeAPIKeys := 0
+	for _, account := range cfg.Accounts {
+		if account.IsActive {
+			activeAccounts++
+			activeAPIKeys += len(account.GetActiveAPIKeys())
+		}
+	}
 
 	// Language settings
 	uiLangDisplay := messages.GetMessage("lang_1", cfg)
@@ -120,6 +131,8 @@ func ShowCurrentConfig(cfg config.Config) {
 %s🌐 %s: %s
 %s💬 %s: %s
 %s🎨 %s: %s
+%s👥 Active Accounts: %d
+%s🔑 Available API Keys: %d
 %s%s🚀 %s: %s
 %s📦 %s: %s
 %s===================================================
@@ -130,6 +143,8 @@ func ShowCurrentConfig(cfg config.Config) {
 		Colors["YELLOW"].Sprint(""), messages.GetMessage("ui_lang", cfg), uiLangDisplay,
 		Colors["YELLOW"].Sprint(""), messages.GetMessage("commit_lang", cfg), commitLangDisplay,
 		Colors["YELLOW"].Sprint(""), messages.GetMessage("commit_style", cfg), styleDisplay,
+		Colors["YELLOW"].Sprint(""), activeAccounts,
+		Colors["YELLOW"].Sprint(""), activeAPIKeys,
 		accountInfo,
 		Colors["YELLOW"].Sprint(""), messages.GetMessage("auto_push", cfg), GetStatusDisplay(cfg.AutoPush, cfg),
 		Colors["YELLOW"].Sprint(""), messages.GetMessage("auto_stage", cfg), GetStatusDisplay(cfg.AutoStage, cfg),

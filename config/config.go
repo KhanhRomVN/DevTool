@@ -66,6 +66,84 @@ var (
 		APIKeyRotation:      true,
 		MaxRetries:          3,
 	}
+
+	// Account management messages for UI
+	Messages = map[string]map[string]string{
+		"en": {
+			"account_list":           "Account List",
+			"email_required":         "Email is required",
+			"email_exists":           "Email already exists",
+			"api_key_required":       "API key is required",
+			"first_account_primary":  "First account will be set as primary",
+			"set_as_primary":         "Set as primary account",
+			"account_added":          "Account added successfully",
+			"select_account":         "Select account",
+			"activated":              "activated",
+			"deactivated":            "deactivated",
+			"already_primary":        "Account is already primary",
+			"confirm_delete_account": "Are you sure you want to delete account",
+			"account_deleted":        "Account deleted successfully",
+			"deletion_cancelled":     "Deletion cancelled",
+			"manage_api_keys":        "Manage API Keys",
+			"reset_api_errors":       "Reset API Key Errors",
+			"api_key_options":        "API Key Management",
+			"add_api_key":            "Add API Key",
+			"edit_api_key":           "Edit API Key",
+			"delete_api_key":         "Delete API Key",
+			"test_api_key":           "Test API Key",
+			"confirm_reset_errors":   "Reset all API key error counts",
+			"errors_reset":           "API key errors reset successfully",
+			"reset_cancelled":        "Reset cancelled",
+			"no_active_api_keys":     "No active API keys available",
+			"no_accounts":            "No accounts configured",
+			"analyzing_changes":      "Analyzing changes...",
+			"review_error":           "Error reviewing changes",
+			"generated_msg":          "Generated commit message",
+			"proceed_commit":         "Proceed with commit? (y/N):",
+			"commit_cancelled":       "Commit cancelled",
+			"commit_success":         "Commit successful",
+			"push_success":           "Push successful",
+			"git_error":              "Git error",
+			"no_changes":             "No changes to commit",
+		},
+		"vi": {
+			"account_list":           "Danh sách tài khoản",
+			"email_required":         "Email là bắt buộc",
+			"email_exists":           "Email đã tồn tại",
+			"api_key_required":       "API key là bắt buộc",
+			"first_account_primary":  "Tài khoản đầu tiên sẽ được đặt làm chính",
+			"set_as_primary":         "Đặt làm tài khoản chính",
+			"account_added":          "Đã thêm tài khoản thành công",
+			"select_account":         "Chọn tài khoản",
+			"activated":              "đã kích hoạt",
+			"deactivated":            "đã vô hiệu hóa",
+			"already_primary":        "Tài khoản đã là chính",
+			"confirm_delete_account": "Bạn có chắc muốn xóa tài khoản",
+			"account_deleted":        "Đã xóa tài khoản thành công",
+			"deletion_cancelled":     "Đã hủy xóa",
+			"manage_api_keys":        "Quản lý API Keys",
+			"reset_api_errors":       "Đặt lại lỗi API Key",
+			"api_key_options":        "Quản lý API Key",
+			"add_api_key":            "Thêm API Key",
+			"edit_api_key":           "Sửa API Key",
+			"delete_api_key":         "Xóa API Key",
+			"test_api_key":           "Kiểm tra API Key",
+			"confirm_reset_errors":   "Đặt lại tất cả số lỗi API key",
+			"errors_reset":           "Đã đặt lại lỗi API key thành công",
+			"reset_cancelled":        "Đã hủy đặt lại",
+			"no_active_api_keys":     "Không có API key nào khả dụng",
+			"no_accounts":            "Chưa cấu hình tài khoản",
+			"analyzing_changes":      "Đang phân tích thay đổi...",
+			"review_error":           "Lỗi khi xem xét thay đổi",
+			"generated_msg":          "Thông điệp commit đã tạo",
+			"proceed_commit":         "Tiến hành commit? (y/N):",
+			"commit_cancelled":       "Đã hủy commit",
+			"commit_success":         "Commit thành công",
+			"push_success":           "Push thành công",
+			"git_error":              "Lỗi Git",
+			"no_changes":             "Không có thay đổi để commit",
+		},
+	}
 )
 
 // Generate unique ID for API key
@@ -183,7 +261,7 @@ func GetPrimaryAccountWithFallback(config Config) *Account {
 	return nil
 }
 
-// Get all available API keys from all active accounts
+// Get all available API keys from all active accounts with proper sorting
 func GetAllAvailableAPIKeys(config Config) []struct {
 	Account *Account
 	APIKey  *APIKey
@@ -193,8 +271,26 @@ func GetAllAvailableAPIKeys(config Config) []struct {
 		APIKey  *APIKey
 	}
 
+	// First, add API keys from primary account
 	for i := range config.Accounts {
-		if config.Accounts[i].IsActive {
+		if config.Accounts[i].IsPrimary && config.Accounts[i].IsActive {
+			activeKeys := config.Accounts[i].GetActiveAPIKeys()
+			for j := range activeKeys {
+				result = append(result, struct {
+					Account *Account
+					APIKey  *APIKey
+				}{
+					Account: &config.Accounts[i],
+					APIKey:  &activeKeys[j],
+				})
+			}
+			break
+		}
+	}
+
+	// Then, add API keys from other active accounts
+	for i := range config.Accounts {
+		if !config.Accounts[i].IsPrimary && config.Accounts[i].IsActive {
 			activeKeys := config.Accounts[i].GetActiveAPIKeys()
 			for j := range activeKeys {
 				result = append(result, struct {
@@ -710,4 +806,16 @@ func (a *Account) FindAPIKey(key string) *APIKey {
 		}
 	}
 	return nil
+}
+
+// GetMessage retrieves a localized message
+func GetMessage(key string, config Config) string {
+	if msg, exists := Messages[config.UILanguage][key]; exists {
+		return msg
+	}
+	// Fallback to English if message not found
+	if msg, exists := Messages["en"][key]; exists {
+		return msg
+	}
+	return key // Return key if no translation found
 }

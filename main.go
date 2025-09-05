@@ -1,10 +1,13 @@
-// main.go - Enhanced version with API key rotation support
+// main.go - Enhanced version with API key rotation support and auto-update check
 package main
 
 import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 
 	"dev_tool/ai"
@@ -17,10 +20,13 @@ import (
 )
 
 var (
-	version = "2.0.9"
+	version = "2.1.0"
 )
 
 func main() {
+	// Check for updates in background (non-blocking)
+	go checkForUpdates()
+
 	var rootCmd = &cobra.Command{
 		Use:   "dev_tool",
 		Short: "Dev Tool - AI-powered Git Commit Message Generator",
@@ -32,7 +38,8 @@ Features:
 - Multi-language support (English/Vietnamese)
 - Multiple commit styles
 - Account and API key management
-- Cross-platform compatibility`,
+- Cross-platform compatibility
+- Automatic update checking`,
 		Version: version,
 		Run: func(cmd *cobra.Command, args []string) {
 			// Check if the first argument is "." - if so, run auto-commit
@@ -63,6 +70,32 @@ Features:
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
+	}
+}
+
+// checkForUpdates runs the update checker script in background
+func checkForUpdates() {
+	// Get the directory where the binary is located
+	execPath, err := os.Executable()
+	if err != nil {
+		return
+	}
+
+	installDir := filepath.Dir(execPath)
+	updateScript := filepath.Join(installDir, "check_update.sh")
+
+	// Check if update script exists
+	if _, err := os.Stat(updateScript); os.IsNotExist(err) {
+		return
+	}
+
+	// Run the update checker in background (non-blocking)
+	if runtime.GOOS == "windows" {
+		cmd := exec.Command("cmd", "/C", "start", "/B", updateScript, "--silent")
+		cmd.Start()
+	} else {
+		cmd := exec.Command("bash", updateScript, "--silent")
+		cmd.Start()
 	}
 }
 
