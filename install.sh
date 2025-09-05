@@ -594,13 +594,6 @@ build_from_source() {
     go build -o "$binary_name" .
     go build -o "dev_tool_v${VERSION}" .
     
-    # Copy update checker script
-    if [ -f "check_update.sh" ]; then
-        print_info "Copying update checker script..."
-        cp "check_update.sh" "${install_dir}/check_update.sh"
-        chmod +x "${install_dir}/check_update.sh"
-    fi
-    
     install_binary "./${binary_name}"
     
     cd /
@@ -951,12 +944,6 @@ main() {
     
     print_info "$(text "building_source")..."
     build_from_source
-
-    if [ -f "check_update.sh" ]; then
-    print_info "Copying update checker script..."
-    cp "check_update.sh" "${install_dir}/check_update.sh"
-    chmod +x "${install_dir}/check_update.sh"
-fi
     
     # Final setup
     show_progress 5 5 "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Hoàn tất"; else echo "Finalizing"; fi)"
