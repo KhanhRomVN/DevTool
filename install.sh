@@ -23,7 +23,7 @@ RESET='\033[0m'
 
 # Tool information
 TOOL_NAME="dev_tool"
-VERSION="2.1.1"
+VERSION="2.1.2"
 REPO_URL="https://github.com/KhanhRomVN/dev_tool"
 BINARY_NAME="dev_tool"
 DEVELOPER="KhanhRomVN"
