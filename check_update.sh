@@ -23,6 +23,7 @@ TOOL_NAME="dev_tool"
 REPO_URL="https://github.com/KhanhRomVN/dev_tool"
 VERSION_URL="https://raw.githubusercontent.com/KhanhRomVN/dev_tool/main/VERSION"
 INSTALL_SCRIPT_URL="https://raw.githubusercontent.com/KhanhRomVN/dev_tool/main/install.sh"
+CHECK_UPDATE_SCRIPT_URL="https://raw.githubusercontent.com/KhanhRomVN/dev_tool/main/check_update.sh"
 
 # Get current version
 get_current_version() {
@@ -33,7 +34,7 @@ get_current_version() {
     fi
 }
 
-# Get latest version from GitHub
+# Get latest version from GitHub using curl
 get_latest_version() {
     local latest_version
     if command -v curl >/dev/null 2>&1; then
@@ -60,7 +61,7 @@ version_compare() {
     fi
 }
 
-# Check for updates
+# Check for updates using curl
 check_for_updates() {
     local current_version=$(get_current_version)
     local latest_version=$(get_latest_version)
@@ -82,6 +83,15 @@ check_for_updates() {
     fi
 }
 
+# Run update check via curl (remote execution)
+run_remote_update_check() {
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$CHECK_UPDATE_SCRIPT_URL" | bash -s -- --check-only
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO- "$CHECK_UPDATE_SCRIPT_URL" | bash -s -- --check-only
+    fi
+}
+
 # Prompt user for update
 prompt_update() {
     local latest_version="$1"
@@ -98,7 +108,7 @@ prompt_update() {
         [yY][eE][sS]|[yY])
             echo -e "${GREEN}Updating to version ${latest_version}...${RESET}"
             
-            # Download and run install script
+            # Download and run install script via curl
             if command -v curl >/dev/null 2>&1; then
                 curl -fsSL "$INSTALL_SCRIPT_URL" | bash -s -- --update
             elif command -v wget >/dev/null 2>&1; then
@@ -115,8 +125,25 @@ prompt_update() {
     esac
 }
 
+# Check-only mode (for remote execution)
+check_only_mode() {
+    local latest_version=$(check_for_updates)
+    
+    if [ -n "$latest_version" ]; then
+        echo "UPDATE_AVAILABLE:$latest_version"
+    else
+        echo "UP_TO_DATE"
+    fi
+    exit 0
+}
+
 # Main function
 main() {
+    # Handle check-only mode (for remote execution)
+    if [ "$1" = "--check-only" ]; then
+        check_only_mode
+    fi
+    
     # Only check for updates once per day
     local last_check_file="$HOME/.dev_tool_last_update_check"
     local now=$(date +%s)
@@ -127,7 +154,7 @@ main() {
     fi
     
     # Check if it's been more than 24 hours since last check
-    if [ $((now - last_check)) -lt 86400 ]; then
+    if [ $((now - last_check)) -lt 86400 ] && [ "$1" != "--force" ]; then
         return 0
     fi
     
@@ -139,10 +166,10 @@ main() {
     
     if [ -n "$latest_version" ]; then
         prompt_update "$latest_version"
+    else
+        echo -e "${GREEN}✅ Your dev_tool is up to date!${RESET}"
     fi
 }
 
-# Run only if not in update mode
-if [ "$1" != "--silent" ]; then
-    main
-fi
+# Run main function with all arguments
+main "$@"

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -73,28 +72,13 @@ Features:
 	}
 }
 
-// checkForUpdates runs the update checker script in background
 func checkForUpdates() {
-	// Get the directory where the binary is located
-	execPath, err := os.Executable()
-	if err != nil {
-		return
-	}
-
-	installDir := filepath.Dir(execPath)
-	updateScript := filepath.Join(installDir, "check_update.sh")
-
-	// Check if update script exists
-	if _, err := os.Stat(updateScript); os.IsNotExist(err) {
-		return
-	}
-
-	// Run the update checker in background (non-blocking)
+	// Run the update checker via curl in background (non-blocking)
 	if runtime.GOOS == "windows" {
-		cmd := exec.Command("cmd", "/C", "start", "/B", updateScript, "--silent")
+		cmd := exec.Command("cmd", "/C", "start", "/B", "curl", "-fsSL", "https://raw.githubusercontent.com/KhanhRomVN/dev_tool/main/check_update.sh", "|", "bash")
 		cmd.Start()
 	} else {
-		cmd := exec.Command("bash", updateScript, "--silent")
+		cmd := exec.Command("bash", "-c", "curl -fsSL https://raw.githubusercontent.com/KhanhRomVN/dev_tool/main/check_update.sh | bash --silent")
 		cmd.Start()
 	}
 }
