@@ -16,9 +16,6 @@ type APIKey struct {
 	ID          string    `json:"id"`
 	Key         string    `json:"key"`
 	Description string    `json:"description"`
-	IsActive    bool      `json:"is_active"`
-	LastUsed    time.Time `json:"last_used"`
-	ErrorCount  int       `json:"error_count"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
@@ -157,9 +154,6 @@ func (a *Account) AddAPIKey(key, description string) {
 		ID:          generateAPIKeyID(),
 		Key:         key,
 		Description: description,
-		IsActive:    true,
-		LastUsed:    time.Time{},
-		ErrorCount:  0,
 		CreatedAt:   time.Now(),
 	}
 	a.APIKeys = append(a.APIKeys, newAPIKey)
@@ -178,66 +172,15 @@ func (a *Account) RemoveAPIKey(keyID string) bool {
 
 // Get active API Keys from account
 func (a *Account) GetActiveAPIKeys() []APIKey {
-	var activeKeys []APIKey
-	for _, key := range a.APIKeys {
-		if key.IsActive {
-			activeKeys = append(activeKeys, key)
-		}
-	}
-	return activeKeys
+	return a.APIKeys // Luôn trả về tất cả keys
 }
 
-// Mark API Key as used and update last used time
-func (a *Account) MarkAPIKeyUsed(keyID string) {
-	for i := range a.APIKeys {
-		if a.APIKeys[i].ID == keyID {
-			a.APIKeys[i].LastUsed = time.Now()
-			break
-		}
-	}
-}
-
-// Mark API Key as failed (increment error count)
-func (a *Account) MarkAPIKeyFailed(keyID string) {
-	for i := range a.APIKeys {
-		if a.APIKeys[i].ID == keyID {
-			a.APIKeys[i].ErrorCount++
-			// Deactivate API key if too many failures
-			if a.APIKeys[i].ErrorCount >= 5 {
-				a.APIKeys[i].IsActive = false
-			}
-			break
-		}
-	}
-}
-
-// Reset API Key error count
-func (a *Account) ResetAPIKeyErrors(keyID string) {
-	for i := range a.APIKeys {
-		if a.APIKeys[i].ID == keyID {
-			a.APIKeys[i].ErrorCount = 0
-			a.APIKeys[i].IsActive = true
-			break
-		}
-	}
-}
-
-// Get best available API key (least recently used among active keys)
+// Get best available API key (luôn trả về key đầu tiên)
 func (a *Account) GetBestAPIKey() *APIKey {
-	activeKeys := a.GetActiveAPIKeys()
-	if len(activeKeys) == 0 {
+	if len(a.APIKeys) == 0 {
 		return nil
 	}
-
-	// Sort by last used time (oldest first)
-	bestKey := &activeKeys[0]
-	for i := range activeKeys {
-		if activeKeys[i].LastUsed.Before(bestKey.LastUsed) {
-			bestKey = &activeKeys[i]
-		}
-	}
-
-	return bestKey
+	return &a.APIKeys[0] // Luôn trả về key đầu tiên
 }
 
 // Get primary account with fallback logic

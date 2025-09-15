@@ -240,7 +240,6 @@ func ShowAccountManager(cfg config.Config) config.Config {
 %s3%s │ 🗑️  %s
 %s4%s │ ⭐ %s
 %s5%s │ 🔑 %s
-%s6%s │ 🔄 %s
 %s0%s │ ⬅️  %s
 %s===================================================
 		`,
@@ -252,13 +251,12 @@ func ShowAccountManager(cfg config.Config) config.Config {
 			Colors["RED"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("delete_account", cfg),
 			Colors["PURPLE"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("set_primary", cfg),
 			Colors["CYAN"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("manage_api_keys", cfg),
-			Colors["BLUE"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("reset_api_errors", cfg),
 			Colors["WHITE"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("back_to_menu", cfg),
 			Colors["BLUE"].Sprint(""),
 		)
 		fmt.Println(optionsText)
 
-		fmt.Printf("\n%s🎯 %s (0-6): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_option", cfg), Colors["END"].Sprint(""))
+		fmt.Printf("\n%s🎯 %s (0-5): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_option", cfg), Colors["END"].Sprint(""))
 
 		reader := bufio.NewReader(os.Stdin)
 		choice, _ := reader.ReadString('\n')
@@ -275,8 +273,6 @@ func ShowAccountManager(cfg config.Config) config.Config {
 			cfg = SetPrimaryAccount(cfg)
 		case "5":
 			cfg = ManageAPIKeys(cfg)
-		case "6":
-			cfg = ResetAPIKeyErrors(cfg)
 		case "0":
 			return cfg
 		default:
@@ -337,28 +333,13 @@ func ShowAccountList(cfg config.Config) {
 		if totalKeys > 0 {
 			fmt.Printf("%s   🔑 API Keys:\n", Colors["CYAN"].Sprint(""))
 			for j, apiKey := range account.APIKeys {
-				keyStatus := "✅ Active"
-				if !apiKey.IsActive {
-					keyStatus = "❌ Inactive"
-				}
-
-				lastUsed := "Never"
-				if !apiKey.LastUsed.IsZero() {
-					lastUsed = apiKey.LastUsed.Format("2006-01-02 15:04")
-				}
-
 				maskedKey := maskAPIKey(apiKey.Key)
 
-				fmt.Printf("%s      %d. %s (%s) - %s\n",
+				fmt.Printf("%s      %d. %s (%s)\n",
 					Colors["DIM"].Sprint(""),
 					j+1,
 					apiKey.Description,
-					maskedKey,
-					keyStatus)
-				fmt.Printf("%s         Last used: %s, Errors: %d\n",
-					Colors["DIM"].Sprint(""),
-					lastUsed,
-					apiKey.ErrorCount)
+					maskedKey)
 			}
 		}
 	}
@@ -678,8 +659,6 @@ func ManageAccountAPIKeys(cfg config.Config, account *config.Account) config.Con
 %s1%s │ ➕ %s
 %s2%s │ ✏️  %s
 %s3%s │ 🗑️  %s
-%s4%s │ 🔄 %s
-%s5%s │ 🧪 %s
 %s0%s │ ⬅️  %s
 %s===================================================
 		`,
@@ -689,14 +668,12 @@ func ManageAccountAPIKeys(cfg config.Config, account *config.Account) config.Con
 			Colors["GREEN"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("add_api_key", cfg),
 			Colors["YELLOW"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("edit_api_key", cfg),
 			Colors["RED"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("delete_api_key", cfg),
-			Colors["BLUE"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("reset_api_errors", cfg),
-			Colors["PURPLE"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("test_api_key", cfg),
 			Colors["WHITE"].Sprint(""), Colors["END"].Sprint(""), messages.GetMessage("back_to_menu", cfg),
 			Colors["BLUE"].Sprint(""),
 		)
 		fmt.Println(optionsText)
 
-		fmt.Printf("\n%s🎯 %s (0-5): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_option", cfg), Colors["END"].Sprint(""))
+		fmt.Printf("\n%s🎯 %s (0-3): %s", Colors["BOLD"].Sprint(""), messages.GetMessage("select_option", cfg), Colors["END"].Sprint(""))
 
 		reader := bufio.NewReader(os.Stdin)
 		choice, _ := reader.ReadString('\n')
@@ -709,10 +686,6 @@ func ManageAccountAPIKeys(cfg config.Config, account *config.Account) config.Con
 			account = EditAPIKey(account)
 		case "3":
 			account = DeleteAPIKey(account)
-		case "4":
-			account = ResetAPIKeyErrorsForAccount(account)
-		case "5":
-			TestAPIKey(*account)
 		case "0":
 			return cfg
 		default:
@@ -741,35 +714,17 @@ func ShowAPIKeyList(account config.Account) {
 	}
 
 	for i, apiKey := range account.APIKeys {
-		statusIcon := "✅"
-		statusText := "Active"
-		if !apiKey.IsActive {
-			statusIcon = "❌"
-			statusText = "Inactive"
-		}
-
-		lastUsed := "Never"
-		if !apiKey.LastUsed.IsZero() {
-			lastUsed = apiKey.LastUsed.Format("2006-01-02 15:04")
-		}
-
 		maskedKey := maskAPIKey(apiKey.Key)
 
 		fmt.Printf(`
 %s---------------------------------------------------
-%s%d. %s 🔑 %s (%s)
+%s%d. 🔑 %s (%s)
 %s   📝 Description: %s
-%s   %s Status: %s
-%s   ⏰ Last Used: %s
-%s   ❌ Error Count: %d
 %s   📅 Created: %s
 		`,
 			Colors["DIM"].Sprint(""),
-			Colors["BOLD"].Sprint(""), i+1, statusIcon, maskedKey, apiKey.Description,
+			Colors["BOLD"].Sprint(""), i+1, maskedKey, apiKey.Description,
 			Colors["YELLOW"].Sprint(""), apiKey.Description,
-			Colors["YELLOW"].Sprint(""), statusIcon, statusText,
-			Colors["YELLOW"].Sprint(""), lastUsed,
-			Colors["YELLOW"].Sprint(""), apiKey.ErrorCount,
 			Colors["DIM"].Sprint(""), apiKey.CreatedAt.Format("2006-01-02 15:04"),
 		)
 	}
@@ -836,19 +791,17 @@ func EditAPIKey(account *config.Account) *config.Account {
 
 	apiKey := &account.APIKeys[keyIndex-1]
 
-	// Edit API key menu
+	// Edit API key menu - only allow changing description
 	fmt.Printf(`
 %s===== Edit API Key: %s =====
 1️⃣  Change Description (Current: %s)
-2️⃣  Toggle Active Status (Current: %s)
 0️⃣  Back
 		`,
 		Colors["CYAN"].Sprint(""),
 		maskAPIKey(apiKey.Key),
-		apiKey.Description,
-		GetStatusDisplay(apiKey.IsActive, config.Config{UILanguage: "en"}))
+		apiKey.Description)
 
-	fmt.Printf("\n%s🎯 Select option (0-2): %s", Colors["BOLD"].Sprint(""), Colors["END"].Sprint(""))
+	fmt.Printf("\n%s🎯 Select option (0-1): %s", Colors["BOLD"].Sprint(""), Colors["END"].Sprint(""))
 
 	editChoice, _ := reader.ReadString('\n')
 	editChoice = strings.TrimSpace(editChoice)
@@ -863,14 +816,6 @@ func EditAPIKey(account *config.Account) *config.Account {
 			apiKey.Description = newDesc
 			messages.PrintSuccess("✅ Description updated")
 		}
-	case "2":
-		// Toggle active status
-		apiKey.IsActive = !apiKey.IsActive
-		status := "activated"
-		if !apiKey.IsActive {
-			status = "deactivated"
-		}
-		messages.PrintSuccess(fmt.Sprintf("✅ API key %s", status))
 	case "0":
 		// Back
 	default:
@@ -921,108 +866,6 @@ func DeleteAPIKey(account *config.Account) *config.Account {
 	}
 
 	return account
-}
-
-// Reset API Key Errors for account
-func ResetAPIKeyErrorsForAccount(account *config.Account) *config.Account {
-	messages.PrintSection("🔄 Reset API Key Errors", "BLUE")
-
-	if len(account.APIKeys) == 0 {
-		messages.PrintWarning("No API keys found for this account")
-		return account
-	}
-
-	// Confirmation
-	fmt.Printf("%s⚠️ Reset error counts for all API keys in account %s? Type 'yes' to confirm: %s",
-		Colors["YELLOW"].Sprint(""),
-		account.Email,
-		Colors["END"].Sprint(""))
-
-	reader := bufio.NewReader(os.Stdin)
-	confirm, _ := reader.ReadString('\n')
-	confirm = strings.TrimSpace(strings.ToLower(confirm))
-
-	if confirm == "yes" {
-		for i := range account.APIKeys {
-			account.APIKeys[i].ErrorCount = 0
-		}
-		messages.PrintSuccess("✅ API key error counts reset successfully")
-	} else {
-		messages.PrintInfo("Reset cancelled")
-	}
-
-	return account
-}
-
-// Reset API Key Errors for all accounts
-func ResetAPIKeyErrors(cfg config.Config) config.Config {
-	messages.PrintSection("🔄 "+messages.GetMessage("reset_api_errors", cfg), "BLUE")
-
-	if len(cfg.Accounts) == 0 {
-		messages.PrintWarning(messages.GetMessage("no_accounts", cfg))
-		return cfg
-	}
-
-	// Confirmation
-	fmt.Printf("%s⚠️ %s? %s",
-		Colors["YELLOW"].Sprint(""),
-		messages.GetMessage("confirm_reset_errors", cfg),
-		messages.GetMessage("type_yes_confirm", cfg))
-
-	reader := bufio.NewReader(os.Stdin)
-	confirm, _ := reader.ReadString('\n')
-	confirm = strings.TrimSpace(strings.ToLower(confirm))
-
-	if confirm == "yes" {
-		for i := range cfg.Accounts {
-			for j := range cfg.Accounts[i].APIKeys {
-				cfg.Accounts[i].APIKeys[j].ErrorCount = 0
-			}
-		}
-		messages.PrintSuccess(messages.GetMessage("errors_reset", cfg))
-	} else {
-		messages.PrintInfo(messages.GetMessage("reset_cancelled", cfg))
-	}
-
-	return cfg
-}
-
-// Test API Key functionality
-func TestAPIKey(account config.Account) {
-	messages.PrintSection("🧪 Test API Key", "PURPLE")
-
-	activeKeys := account.GetActiveAPIKeys()
-	if len(activeKeys) == 0 {
-		messages.PrintWarning("No active API keys found for this account")
-		return
-	}
-
-	fmt.Printf("Testing API connectivity for account: %s\n", account.Email)
-	fmt.Printf("Model: %s\n", account.Model)
-
-	// Test each active API key
-	for i, apiKey := range activeKeys {
-		fmt.Printf("\n%sTesting API Key %d: %s...\n",
-			Colors["CYAN"].Sprint(""),
-			i+1,
-			maskAPIKey(apiKey.Key))
-
-		// Simulate API test (in real implementation, this would make an actual API call)
-		success := true
-		responseTime := "100ms"
-
-		if success {
-			fmt.Printf("%s✅ API Key test successful! Response time: %s\n",
-				Colors["GREEN"].Sprint(""),
-				responseTime)
-		} else {
-			fmt.Printf("%s❌ API Key test failed!\n", Colors["RED"].Sprint(""))
-		}
-	}
-
-	fmt.Printf("\n%sAPI testing completed for account: %s\n",
-		Colors["BOLD"].Sprint(""),
-		account.Email)
 }
 
 func changeUILanguage(cfg config.Config, reader *bufio.Reader) config.Config {
