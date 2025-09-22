@@ -589,6 +589,12 @@ install_go() {
     
     local go_url=""
     local temp_dir=$(mktemp -d)
+    local go_install_dir="/usr/local/go"
+    
+    # Use user directory if not root
+    if [[ "$EUID" -ne 0 ]]; then
+        go_install_dir="$HOME/go-lang"
+    fi
     
     print_info "$(text "downloading_go")..."
     
@@ -600,7 +606,8 @@ install_go() {
             wget -O "$temp_dir/go.zip" "$go_url"
         fi
         unzip -q "$temp_dir/go.zip" -d "$temp_dir"
-        mv "$temp_dir/go" "$HOME/go"
+        rm -rf "$go_install_dir"
+        mv "$temp_dir/go" "$go_install_dir"
         rm -f "$temp_dir/go.zip"
     else
         go_url="https://dl.google.com/go/${go_version}.${os}-${arch}.tar.gz"
@@ -610,43 +617,53 @@ install_go() {
             wget -O "$temp_dir/go.tar.gz" "$go_url"
         fi
         tar -xzf "$temp_dir/go.tar.gz" -C "$temp_dir"
-        mv "$temp_dir/go" "$HOME/go"
+        rm -rf "$go_install_dir"
+        mv "$temp_dir/go" "$go_install_dir"
         rm -f "$temp_dir/go.tar.gz"
     fi
     
-    # Add Go to PATH and set environment variables
-    export GOROOT="$HOME/go"
+    # Set correct environment variables
+    export GOROOT="$go_install_dir"
     export GOPATH="$HOME/go"
     export GOMODCACHE="$GOPATH/pkg/mod"
     export PATH="$GOROOT/bin:$PATH"
     
     # Add to shell profile
-    if [[ -f "$HOME/.bashrc" ]]; then
-        echo "export GOROOT=\"$HOME/go\"" >> "$HOME/.bashrc"
-        echo "export GOPATH=\"$HOME/go\"" >> "$HOME/.bashrc"
-        echo "export GOMODCACHE=\"\$GOPATH/pkg/mod\"" >> "$HOME/.bashrc"
-        echo "export PATH=\"\$GOROOT/bin:\$PATH\"" >> "$HOME/.bashrc"
-    fi
+    local shell_profiles=("$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile")
     
-    if [[ -f "$HOME/.zshrc" ]]; then
-        echo "export GOROOT=\"$HOME/go\"" >> "$HOME/.zshrc"
-        echo "export GOPATH=\"$HOME/go\"" >> "$HOME/.zshrc"
-        echo "export GOMODCACHE=\"\$GOPATH/pkg/mod\"" >> "$HOME/.zshrc"
-        echo "export PATH=\"\$GOROOT/bin:\$PATH\"" >> "$HOME/.zshrc"
-    fi
-    
-    # Also add to Windows-specific profiles
     if is_windows; then
-        if [[ -f "$HOME/.bash_profile" ]]; then
-            echo "export GOROOT=\"$HOME/go\"" >> "$HOME/.bash_profile"
-            echo "export GOPATH=\"$HOME/go\"" >> "$HOME/.bash_profile"
-            echo "export GOMODCACHE=\"\$GOPATH/pkg/mod\"" >> "$HOME/.bash_profile"
-            echo "export PATH=\"\$GOROOT/bin:\$PATH\"" >> "$HOME/.bash_profile"
-        fi
+        shell_profiles+=("$HOME/.bash_profile")
     fi
+    
+    for profile in "${shell_profiles[@]}"; do
+        if [[ -f "$profile" ]]; then
+            # Remove old Go paths to prevent conflicts
+            sed -i '/export GOROOT=/d' "$profile" 2>/dev/null || true
+            sed -i '/export GOPATH=/d' "$profile" 2>/dev/null || true
+            sed -i '/export GOMODCACHE=/d' "$profile" 2>/dev/null || true
+            
+            # Add new Go configuration
+            echo "" >> "$profile"
+            echo "# Go language configuration" >> "$profile"
+            echo "export GOROOT=\"$go_install_dir\"" >> "$profile"
+            echo "export GOPATH=\"\$HOME/go\"" >> "$profile"
+            echo "export GOMODCACHE=\"\$GOPATH/pkg/mod\"" >> "$profile"
+            echo "export PATH=\"\$GOROOT/bin:\$PATH\"" >> "$profile"
+            break
+        fi
+    done
     
     rm -rf "$temp_dir"
     print_success "$(text "go_install_success")"
+    
+    # Verify installation
+    if "$GOROOT/bin/go" version >/dev/null 2>&1; then
+        local installed_version=$("$GOROOT/bin/go" version | awk '{print $3}')
+        print_info "Installed Go: $installed_version"
+    else
+        print_error "Go installation verification failed"
+        return 1
+    fi
 }
 
 build_from_source() {
