@@ -21,7 +21,7 @@ parts:
     plugin: dump
     source: build/linux/
     organize:
-      dev_tool_v2.1.4: bin/dev_tool
+      dev_tool_v2.1.5: bin/dev_tool
     stage-packages: [git]
 
   go-runtime:

@@ -24,7 +24,7 @@ RESET='\033[0m'
 # Tool information
 TOOL_NAME="dev_tool"
 VERSION="2.1.4"
-REPO_URL="https://github.com/KhanhRomVN/dev_tool"
+REPO_URL="https://github.com/KhanhRomVN/DevTool"
 BINARY_NAME="dev_tool"
 DEVELOPER="KhanhRomVN"
 CONTACT="khanhromvn@gmail.com"
@@ -522,16 +522,41 @@ add_to_path() {
 read_input() {
     local prompt="$1"
     local default="$2"
+    local validation_pattern="${3:-}"
     local input=""
+    local attempts=0
+    local max_attempts=3
     
-    if [ -t 0 ]; then
-        read -p "$prompt" input
-    elif [ -r /dev/tty ]; then
-        read -p "$prompt" input < /dev/tty
-    else
-        print_warning "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Không thể đọc input, sử dụng mặc định"; else echo "Cannot read input, using default"; fi): $default"
-        input="$default"
-    fi
+    while [[ $attempts -lt $max_attempts ]]; do
+        if [ -t 0 ]; then
+            read -p "$prompt" input
+        elif [ -r /dev/tty ]; then
+            read -p "$prompt" input < /dev/tty
+        else
+            print_warning "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Không thể đọc input, sử dụng mặc định"; else echo "Cannot read input, using default"; fi): $default"
+            input="$default"
+            break
+        fi
+        
+        # Use default if empty
+        if [[ -z "$input" ]]; then
+            input="$default"
+        fi
+        
+        # Validate input if pattern provided
+        if [[ -n "$validation_pattern" ]]; then
+            if [[ "$input" =~ ^${validation_pattern}$ ]]; then
+                break
+            else
+                ((attempts++))
+                if [[ $attempts -lt $max_attempts ]]; then
+                    print_warning "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Input không hợp lệ. Thử lại"; else echo "Invalid input. Please try again"; fi)"
+                fi
+            fi
+        else
+            break
+        fi
+    done
     
     echo "$input"
 }
@@ -543,15 +568,48 @@ check_go_installation() {
         "$HOME/go/bin/go"
         "/usr/local/go/bin/go"
         "/usr/bin/go"
+        "/usr/lib/go/bin/go"  # Arch Linux specific
+        "/opt/go/bin/go"      # Alternative location
     )
     
     for go_bin in "${go_locations[@]}"; do
         if [[ -x "$go_bin" ]] && "$go_bin" version >/dev/null 2>&1; then
             local go_version=$("$go_bin" version | awk '{print $3}' | sed 's/go//')
             print_success "$(text "go_found"): version $go_version"
-            export GOROOT=$("$go_bin" env GOROOT 2>/dev/null || dirname "$(dirname "$go_bin")")
-            export PATH="$GOROOT/bin:$PATH"
-            return 0
+            
+            # Get GOROOT more reliably
+            local go_root=$("$go_bin" env GOROOT 2>/dev/null)
+            
+            # Fallback GOROOT detection for different systems
+            if [[ -z "$go_root" ]] || [[ ! -d "$go_root" ]]; then
+                # Try common locations based on binary path
+                local bin_dir=$(dirname "$go_bin")
+                local possible_roots=(
+                    "$(dirname "$bin_dir")"
+                    "/usr/lib/go"      # Arch Linux package location
+                    "/usr/local/go"    # Standard location
+                    "/opt/go"          # Alternative location
+                )
+                
+                for root in "${possible_roots[@]}"; do
+                    if [[ -d "$root" ]] && [[ -f "$root/bin/go" ]]; then
+                        go_root="$root"
+                        break
+                    fi
+                done
+            fi
+            
+            if [[ -n "$go_root" ]] && [[ -d "$go_root" ]]; then
+                export GOROOT="$go_root"
+                export PATH="$GOROOT/bin:$PATH"
+                print_info "GOROOT set to: $GOROOT"
+                return 0
+            else
+                print_warning "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Tìm thấy Go nhưng không thể xác định GOROOT"; else echo "Found Go but cannot determine GOROOT"; fi)"
+                # Continue with Go found but no GOROOT
+                export PATH="$(dirname "$go_bin"):$PATH"
+                return 0
+            fi
         fi
     done
     
@@ -596,37 +654,54 @@ install_go() {
         go_install_dir="$HOME/go-lang"
     fi
     
+    # Kiểm tra kết nối mạng trước khi tải
+    if ! check_network_connectivity; then
+        print_error "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Không có kết nối mạng. Không thể tải Go"; else echo "No network connectivity. Cannot download Go"; fi)"
+        show_manual_go_installation
+        return 1
+    fi
+
     print_info "$(text "downloading_go")..."
     
+    # Sử dụng fallback download
+    if ! download_go_with_fallback "$go_version" "$os" "$arch" "$temp_dir"; then
+        print_error "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Không thể tải Go từ tất cả mirrors"; else echo "Failed to download Go from all mirrors"; fi)"
+        show_manual_go_installation
+        return 1
+    fi
+
+    # Extract downloaded file
     if [[ "$os" == "windows" ]]; then
-        go_url="https://dl.google.com/go/${go_version}.windows-${arch}.zip"
-        if command -v curl >/dev/null 2>&1; then
-            curl -L -o "$temp_dir/go.zip" "$go_url"
-        else
-            wget -O "$temp_dir/go.zip" "$go_url"
+        if ! unzip -q "$temp_dir/go.zip" -d "$temp_dir"; then
+            print_error "Failed to extract Go archive"
+            return 1
         fi
-        unzip -q "$temp_dir/go.zip" -d "$temp_dir"
-        rm -rf "$go_install_dir"
-        mv "$temp_dir/go" "$go_install_dir"
         rm -f "$temp_dir/go.zip"
     else
-        go_url="https://dl.google.com/go/${go_version}.${os}-${arch}.tar.gz"
-        if command -v curl >/dev/null 2>&1; then
-            curl -L -o "$temp_dir/go.tar.gz" "$go_url"
-        else
-            wget -O "$temp_dir/go.tar.gz" "$go_url"
+        if ! tar -xzf "$temp_dir/go.tar.gz" -C "$temp_dir"; then
+            print_error "Failed to extract Go archive"
+            return 1
         fi
-        tar -xzf "$temp_dir/go.tar.gz" -C "$temp_dir"
-        rm -rf "$go_install_dir"
-        mv "$temp_dir/go" "$go_install_dir"
         rm -f "$temp_dir/go.tar.gz"
     fi
+
+    rm -rf "$go_install_dir"
+    mv "$temp_dir/go" "$go_install_dir"
     
-    # Set correct environment variables
+     # Set correct environment variables
     export GOROOT="$go_install_dir"
     export GOPATH="$HOME/go"
     export GOMODCACHE="$GOPATH/pkg/mod"
     export PATH="$GOROOT/bin:$PATH"
+    
+    # Create GOPATH directory if it doesn't exist
+    mkdir -p "$GOPATH" "$GOMODCACHE"
+    
+    # Verify GOROOT is accessible
+    if [[ ! -d "$GOROOT" ]] || [[ ! -f "$GOROOT/bin/go" ]]; then
+        print_error "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "GOROOT không hợp lệ sau khi cài đặt"; else echo "Invalid GOROOT after installation"; fi): $GOROOT"
+        return 1
+    fi
     
     # Add to shell profile
     local shell_profiles=("$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile")
@@ -656,13 +731,399 @@ install_go() {
     rm -rf "$temp_dir"
     print_success "$(text "go_install_success")"
     
-    # Verify installation
-    if "$GOROOT/bin/go" version >/dev/null 2>&1; then
-        local installed_version=$("$GOROOT/bin/go" version | awk '{print $3}')
-        print_info "Installed Go: $installed_version"
-    else
-        print_error "Go installation verification failed"
+    # Verify installation với multiple attempts
+    local verification_attempts=3
+    local verified=false
+
+    for ((i=1; i<=verification_attempts; i++)); do
+        if [[ -f "$GOROOT/bin/go" ]] && "$GOROOT/bin/go" version >/dev/null 2>&1; then
+            local installed_version=$("$GOROOT/bin/go" version | awk '{print $3}')
+            print_success "$(text "go_install_success"): $installed_version"
+            verified=true
+            break
+        fi
+        
+        if [[ $i -lt $verification_attempts ]]; then
+            print_info "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Thử xác minh lần $i thất bại, đang thử lại"; else echo "Verification attempt $i failed, retrying"; fi)..."
+            sleep 2
+        fi
+    done
+
+    if [[ "$verified" == false ]]; then
+        print_error "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Xác minh cài đặt Go thất bại"; else echo "Go installation verification failed"; fi)"
+        show_manual_go_installation
         return 1
+    fi
+}
+
+# Download Go với fallback mirrors
+download_go_with_fallback() {
+    local go_version="$1"
+    local os="$2" 
+    local arch="$3"
+    local temp_dir="$4"
+    local file_extension=""
+    
+    if [[ "$os" == "windows" ]]; then
+        file_extension="zip"
+    else
+        file_extension="tar.gz"
+    fi
+    
+    local filename="$go_version.$os-$arch.$file_extension"
+    local mirrors=(
+        "https://dl.google.com/go/$filename"
+        "https://golang.org/dl/$filename"
+        "https://go.dev/dl/$filename"
+    )
+    
+    for mirror in "${mirrors[@]}"; do
+        print_info "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Thử tải từ"; else echo "Trying to download from"; fi): $mirror"
+        
+        if command -v curl >/dev/null 2>&1; then
+            if curl -L --connect-timeout 30 --max-time 300 -o "$temp_dir/go.$file_extension" "$mirror"; then
+                return 0
+            fi
+        else
+            if wget --timeout=300 -O "$temp_dir/go.$file_extension" "$mirror"; then
+                return 0
+            fi
+        fi
+        
+        print_warning "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Tải thất bại từ mirror này"; else echo "Failed to download from this mirror"; fi)"
+    done
+    
+    return 1
+}
+
+# Manual Go installation guide
+show_manual_go_installation() {
+    echo ""
+    echo -e "${YELLOW}${BOLD}╔══════════════════════════════════════════════════════════════════════════════╗${RESET}"
+    if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+        echo -e "${YELLOW}${BOLD}║                        ⚠️  CÀI ĐẶT GO THẤT BẠI                               ║${RESET}"
+        echo -e "${YELLOW}${BOLD}║                     HƯỚNG DẪN CÀI ĐẶT GO THỦ CÔNG                           ║${RESET}"
+    else
+        echo -e "${YELLOW}${BOLD}║                          ⚠️  GO INSTALLATION FAILED                        ║${RESET}"
+        echo -e "${YELLOW}${BOLD}║                      MANUAL GO INSTALLATION GUIDE                           ║${RESET}"
+    fi
+    echo -e "${YELLOW}${BOLD}╚══════════════════════════════════════════════════════════════════════════════╝${RESET}"
+    echo ""
+    
+    local platform=$(detect_platform)
+    local os=$(echo "$platform" | cut -d'_' -f1)
+    local arch=$(echo "$platform" | cut -d'_' -f2)
+    
+    # Map architecture for display
+    case "$arch" in
+        "amd64") arch_display="64-bit" ;;
+        "arm64") arch_display="ARM64" ;;
+        "386") arch_display="32-bit" ;;
+        *) arch_display="$arch" ;;
+    esac
+    
+    if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+        print_info "Hệ thống phát hiện: $os ($arch_display)"
+        echo ""
+        echo -e "${WHITE}${BOLD}📋 CÁCH CÀI ĐẶT GO CHO HỆ THỐNG CỦA BẠN:${RESET}"
+    else
+        print_info "Detected system: $os ($arch_display)"
+        echo ""
+        echo -e "${WHITE}${BOLD}📋 HOW TO INSTALL GO FOR YOUR SYSTEM:${RESET}"
+    fi
+    
+    case "$os" in
+        "windows")
+            show_windows_go_installation
+            ;;
+        "linux")
+            show_linux_go_installation
+            ;;
+        "darwin")
+            show_macos_go_installation
+            ;;
+        *)
+            show_generic_go_installation
+            ;;
+    esac
+    
+    echo ""
+    if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+        echo -e "${CYAN}${BOLD}🔄 SAU KHI CÀI ĐẶT GO:${RESET}"
+        echo -e "${GREEN}  1.${RESET} Khởi động lại terminal"
+        echo -e "${GREEN}  2.${RESET} Chạy lại script này: ${GREEN}./install.sh${RESET}"
+        echo -e "${GREEN}  3.${RESET} Hoặc chạy: ${GREEN}go version${RESET} để kiểm tra"
+        echo ""
+        echo -e "${MAGENTA}${BOLD}💡 LƯU Ý:${RESET} ${MAGENTA}Đảm bảo biến môi trường PATH đã được cập nhật${RESET}"
+    else
+        echo -e "${CYAN}${BOLD}🔄 AFTER INSTALLING GO:${RESET}"
+        echo -e "${GREEN}  1.${RESET} Restart your terminal"
+        echo -e "${GREEN}  2.${RESET} Re-run this script: ${GREEN}./install.sh${RESET}"
+        echo -e "${GREEN}  3.${RESET} Or run: ${GREEN}go version${RESET} to verify"
+        echo ""
+        echo -e "${MAGENTA}${BOLD}💡 NOTE:${RESET} ${MAGENTA}Make sure PATH environment variable is updated${RESET}"
+    fi
+}
+
+# Windows Go installation guide
+show_windows_go_installation() {
+    if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+        echo -e "${BLUE}${BOLD}🪟 WINDOWS:${RESET}"
+        echo ""
+        echo -e "${YELLOW}${BOLD}Phương pháp 1: Tải từ trang chính thức (Khuyên dùng)${RESET}"
+        echo -e "${GREEN}  1.${RESET} Truy cập: ${CYAN}https://golang.org/dl/${RESET}"
+        echo -e "${GREEN}  2.${RESET} Tải file: ${GREEN}go1.21.x.windows-amd64.msi${RESET}"
+        echo -e "${GREEN}  3.${RESET} Chạy file .msi và làm theo hướng dẫn"
+        echo -e "${GREEN}  4.${RESET} Khởi động lại Command Prompt/PowerShell"
+        echo ""
+        echo -e "${YELLOW}${BOLD}Phương pháp 2: Sử dụng Chocolatey${RESET}"
+        echo -e "${GREEN}  1.${RESET} Mở PowerShell với quyền Admin"
+        echo -e "${GREEN}  2.${RESET} Chạy: ${GREEN}choco install golang${RESET}"
+        echo ""
+        echo -e "${YELLOW}${BOLD}Phương pháp 3: Sử dụng Scoop${RESET}"
+        echo -e "${GREEN}  1.${RESET} Mở PowerShell"
+        echo -e "${GREEN}  2.${RESET} Chạy: ${GREEN}scoop install go${RESET}"
+        echo ""
+        echo -e "${YELLOW}${BOLD}Phương pháp 4: Sử dụng winget${RESET}"
+        echo -e "${GREEN}  1.${RESET} Mở Command Prompt hoặc PowerShell"
+        echo -e "${GREEN}  2.${RESET} Chạy: ${GREEN}winget install GoLang.Go${RESET}"
+    else
+        echo -e "${BLUE}${BOLD}🪟 WINDOWS:${RESET}"
+        echo ""
+        echo -e "${YELLOW}${BOLD}Method 1: Download from official site (Recommended)${RESET}"
+        echo -e "${GREEN}  1.${RESET} Visit: ${CYAN}https://golang.org/dl/${RESET}"
+        echo -e "${GREEN}  2.${RESET} Download: ${GREEN}go1.21.x.windows-amd64.msi${RESET}"
+        echo -e "${GREEN}  3.${RESET} Run the .msi file and follow instructions"
+        echo -e "${GREEN}  4.${RESET} Restart Command Prompt/PowerShell"
+        echo ""
+        echo -e "${YELLOW}${BOLD}Method 2: Using Chocolatey${RESET}"
+        echo -e "${GREEN}  1.${RESET} Open PowerShell as Administrator"
+        echo -e "${GREEN}  2.${RESET} Run: ${GREEN}choco install golang${RESET}"
+        echo ""
+        echo -e "${YELLOW}${BOLD}Method 3: Using Scoop${RESET}"
+        echo -e "${GREEN}  1.${RESET} Open PowerShell"
+        echo -e "${GREEN}  2.${RESET} Run: ${GREEN}scoop install go${RESET}"
+        echo ""
+        echo -e "${YELLOW}${BOLD}Method 4: Using winget${RESET}"
+        echo -e "${GREEN}  1.${RESET} Open Command Prompt or PowerShell"
+        echo -e "${GREEN}  2.${RESET} Run: ${GREEN}winget install GoLang.Go${RESET}"
+    fi
+}
+
+# Linux Go installation guide
+show_linux_go_installation() {
+    local distro=$(detect_linux_distro)
+    
+    if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+        echo -e "${BLUE}${BOLD}🐧 LINUX ($distro):${RESET}"
+        echo ""
+        echo -e "${YELLOW}${BOLD}Lệnh cụ thể cho hệ thống của bạn:${RESET}"
+    else
+        echo -e "${BLUE}${BOLD}🐧 LINUX ($distro):${RESET}"
+        echo ""
+        echo -e "${YELLOW}${BOLD}Specific commands for your system:${RESET}"
+    fi
+    
+    case "$distro" in
+        "ubuntu"|"debian"|"pop"|"mint"|"elementary")
+            if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+                echo -e "${CYAN}${BOLD}Phát hiện: Ubuntu/Debian based${RESET}"
+                echo -e "${GREEN}  sudo apt update && sudo apt install golang-go${RESET}"
+            else
+                echo -e "${CYAN}${BOLD}Detected: Ubuntu/Debian based${RESET}"
+                echo -e "${GREEN}  sudo apt update && sudo apt install golang-go${RESET}"
+            fi
+            ;;
+        "centos"|"rhel")
+            if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+                echo -e "${CYAN}${BOLD}Phát hiện: CentOS/RHEL${RESET}"
+                echo -e "${GREEN}  sudo dnf install golang  ${RESET}${DIM}# (CentOS 8+)${RESET}"
+                echo -e "${GREEN}  sudo yum install golang  ${RESET}${DIM}# (CentOS 7)${RESET}"
+            else
+                echo -e "${CYAN}${BOLD}Detected: CentOS/RHEL${RESET}"
+                echo -e "${GREEN}  sudo dnf install golang  ${RESET}${DIM}# (CentOS 8+)${RESET}"
+                echo -e "${GREEN}  sudo yum install golang  ${RESET}${DIM}# (CentOS 7)${RESET}"
+            fi
+            ;;
+        "fedora")
+            if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+                echo -e "${CYAN}${BOLD}Phát hiện: Fedora${RESET}"
+                echo -e "${GREEN}  sudo dnf install golang${RESET}"
+            else
+                echo -e "${CYAN}${BOLD}Detected: Fedora${RESET}"
+                echo -e "${GREEN}  sudo dnf install golang${RESET}"
+            fi
+            ;;
+        "arch"|"manjaro")
+            if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+                echo -e "${CYAN}${BOLD}Phát hiện: Arch Linux${RESET}"
+                echo -e "${GREEN}  sudo pacman -S go${RESET}"
+            else
+                echo -e "${CYAN}${BOLD}Detected: Arch Linux${RESET}"
+                echo -e "${GREEN}  sudo pacman -S go${RESET}"
+            fi
+            ;;
+        "opensuse"|"suse")
+            if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+                echo -e "${CYAN}${BOLD}Phát hiện: openSUSE${RESET}"
+                echo -e "${GREEN}  sudo zypper install go${RESET}"
+            else
+                echo -e "${CYAN}${BOLD}Detected: openSUSE${RESET}"
+                echo -e "${GREEN}  sudo zypper install go${RESET}"
+            fi
+            ;;
+        "alpine")
+            if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+                echo -e "${CYAN}${BOLD}Phát hiện: Alpine Linux${RESET}"
+                echo -e "${GREEN}  sudo apk add go${RESET}"
+            else
+                echo -e "${CYAN}${BOLD}Detected: Alpine Linux${RESET}"
+                echo -e "${GREEN}  sudo apk add go${RESET}"
+            fi
+            ;;
+        *)
+            # Hiển thị tất cả các lựa chọn cho distribution không xác định
+            if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+                echo -e "${YELLOW}${BOLD}Không xác định được distribution cụ thể. Thử các lệnh sau:${RESET}"
+                echo ""
+                echo -e "${CYAN}${BOLD}Ubuntu/Debian:${RESET} ${GREEN}sudo apt update && sudo apt install golang-go${RESET}"
+                echo -e "${CYAN}${BOLD}CentOS/RHEL:${RESET} ${GREEN}sudo dnf install golang${RESET}"
+                echo -e "${CYAN}${BOLD}Fedora:${RESET} ${GREEN}sudo dnf install golang${RESET}"
+                echo -e "${CYAN}${BOLD}Arch Linux:${RESET} ${GREEN}sudo pacman -S go${RESET}"
+                echo -e "${CYAN}${BOLD}openSUSE:${RESET} ${GREEN}sudo zypper install go${RESET}"
+                echo -e "${CYAN}${BOLD}Alpine Linux:${RESET} ${GREEN}sudo apk add go${RESET}"
+            else
+                echo -e "${YELLOW}${BOLD}Cannot detect specific distribution. Try these commands:${RESET}"
+                echo ""
+                echo -e "${CYAN}${BOLD}Ubuntu/Debian:${RESET} ${GREEN}sudo apt update && sudo apt install golang-go${RESET}"
+                echo -e "${CYAN}${BOLD}CentOS/RHEL:${RESET} ${GREEN}sudo dnf install golang${RESET}"
+                echo -e "${CYAN}${BOLD}Fedora:${RESET} ${GREEN}sudo dnf install golang${RESET}"
+                echo -e "${CYAN}${BOLD}Arch Linux:${RESET} ${GREEN}sudo pacman -S go${RESET}"
+                echo -e "${CYAN}${BOLD}openSUSE:${RESET} ${GREEN}sudo zypper install go${RESET}"
+                echo -e "${CYAN}${BOLD}Alpine Linux:${RESET} ${GREEN}sudo apk add go${RESET}"
+            fi
+            ;;
+    esac
+    
+    # Thêm phần hướng dẫn cài đặt thủ công
+    echo ""
+    if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+        echo -e "${YELLOW}${BOLD}Hoặc cài đặt thủ công (phiên bản mới nhất):${RESET}"
+        echo -e "${GREEN}  wget https://golang.org/dl/go1.21.6.linux-amd64.tar.gz${RESET}"
+        echo -e "${GREEN}  sudo tar -C /usr/local -xzf go1.21.6.linux-amd64.tar.gz${RESET}"
+        echo -e "${GREEN}  echo 'export PATH=\$PATH:/usr/local/go/bin' >> ~/.bashrc${RESET}"
+        echo -e "${GREEN}  source ~/.bashrc${RESET}"
+    else
+        echo -e "${YELLOW}${BOLD}Or install manually (latest version):${RESET}"
+        echo -e "${GREEN}  wget https://golang.org/dl/go1.21.6.linux-amd64.tar.gz${RESET}"
+        echo -e "${GREEN}  sudo tar -C /usr/local -xzf go1.21.6.linux-amd64.tar.gz${RESET}"
+        echo -e "${GREEN}  echo 'export PATH=\$PATH:/usr/local/go/bin' >> ~/.bashrc${RESET}"
+        echo -e "${GREEN}  source ~/.bashrc${RESET}"
+    fi
+}
+
+# Phát hiện Linux distribution cụ thể
+detect_linux_distro() {
+    local distro=""
+    
+    # Kiểm tra các file nhận diện distribution
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        distro="$ID"
+    elif [[ -f /etc/lsb-release ]]; then
+        . /etc/lsb-release
+        distro=$(echo "$DISTRIB_ID" | tr '[:upper:]' '[:lower:]')
+    elif command -v lsb_release >/dev/null 2>&1; then
+        distro=$(lsb_release -si | tr '[:upper:]' '[:lower:]')
+    elif [[ -f /etc/redhat-release ]]; then
+        if grep -q "CentOS" /etc/redhat-release; then
+            distro="centos"
+        elif grep -q "Red Hat" /etc/redhat-release; then
+            distro="rhel"
+        elif grep -q "Fedora" /etc/redhat-release; then
+            distro="fedora"
+        fi
+    elif [[ -f /etc/arch-release ]]; then
+        distro="arch"
+    elif [[ -f /etc/alpine-release ]]; then
+        distro="alpine"
+    elif [[ -f /etc/SUSE-brand ]] || [[ -f /etc/SuSE-release ]]; then
+        distro="opensuse"
+    else
+        distro="unknown"
+    fi
+    
+    echo "$distro"
+}
+
+# Kiểm tra kết nối mạng
+check_network_connectivity() {
+    local test_urls=(
+        "https://golang.org"
+        "https://dl.google.com"
+        "https://github.com"
+    )
+    
+    for url in "${test_urls[@]}"; do
+        if command -v curl >/dev/null 2>&1; then
+            if curl -s --connect-timeout 5 --max-time 10 "$url" >/dev/null 2>&1; then
+                return 0
+            fi
+        elif command -v wget >/dev/null 2>&1; then
+            if wget --timeout=10 --tries=1 -q --spider "$url" 2>/dev/null; then
+                return 0
+            fi
+        fi
+    done
+    
+    return 1
+}
+
+# macOS Go installation guide
+show_macos_go_installation() {
+    if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+        echo -e "${BLUE}${BOLD}🍎 MACOS:${RESET}"
+        echo ""
+        echo -e "${YELLOW}${BOLD}Phương pháp 1: Tải từ trang chính thức${RESET}"
+        echo -e "${GREEN}  1.${RESET} Truy cập: ${CYAN}https://golang.org/dl/${RESET}"
+        echo -e "${GREEN}  2.${RESET} Tải file: ${GREEN}go1.21.x.darwin-amd64.pkg${RESET}"
+        echo -e "${GREEN}  3.${RESET} Chạy file .pkg và làm theo hướng dẫn"
+        echo ""
+        echo -e "${YELLOW}${BOLD}Phương pháp 2: Sử dụng Homebrew${RESET}"
+        echo -e "${GREEN}  brew install go${RESET}"
+        echo ""
+        echo -e "${YELLOW}${BOLD}Phương pháp 3: Sử dụng MacPorts${RESET}"
+        echo -e "${GREEN}  sudo port install go${RESET}"
+    else
+        echo -e "${BLUE}${BOLD}🍎 MACOS:${RESET}"
+        echo ""
+        echo -e "${YELLOW}${BOLD}Method 1: Download from official site${RESET}"
+        echo -e "${GREEN}  1.${RESET} Visit: ${CYAN}https://golang.org/dl/${RESET}"
+        echo -e "${GREEN}  2.${RESET} Download: ${GREEN}go1.21.x.darwin-amd64.pkg${RESET}"
+        echo -e "${GREEN}  3.${RESET} Run the .pkg file and follow instructions"
+        echo ""
+        echo -e "${YELLOW}${BOLD}Method 2: Using Homebrew${RESET}"
+        echo -e "${GREEN}  brew install go${RESET}"
+        echo ""
+        echo -e "${YELLOW}${BOLD}Method 3: Using MacPorts${RESET}"
+        echo -e "${GREEN}  sudo port install go${RESET}"
+    fi
+}
+
+# Generic Go installation guide
+show_generic_go_installation() {
+    if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then
+        echo -e "${YELLOW}${BOLD}Hướng dẫn chung:${RESET}"
+        echo -e "${GREEN}  1.${RESET} Truy cập: ${CYAN}https://golang.org/dl/${RESET}"
+        echo -e "${GREEN}  2.${RESET} Chọn file phù hợp với hệ điều hành"
+        echo -e "${GREEN}  3.${RESET} Làm theo hướng dẫn cài đặt"
+        echo -e "${GREEN}  4.${RESET} Cập nhật biến môi trường PATH"
+    else
+        echo -e "${YELLOW}${BOLD}Generic instructions:${RESET}"
+        echo -e "${GREEN}  1.${RESET} Visit: ${CYAN}https://golang.org/dl/${RESET}"
+        echo -e "${GREEN}  2.${RESET} Choose appropriate file for your OS"
+        echo -e "${GREEN}  3.${RESET} Follow installation instructions"
+        echo -e "${GREEN}  4.${RESET} Update PATH environment variable"
     fi
 }
 
@@ -670,13 +1131,28 @@ build_from_source() {
     print_step "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Đang build $TOOL_NAME từ mã nguồn"; else echo "Building $TOOL_NAME from source"; fi)..."
     
     # Verify Go environment is set
-    if [[ -z "$GOROOT" ]] || [[ -z "$GOPATH" ]]; then
-        print_warning "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Biến môi trường Go chưa được thiết lập, đang thiết lập..."; else echo "Go environment variables not set, setting up..."; fi)"
-        export GOROOT="$HOME/go"
+    local go_binary=""
+    if command -v go >/dev/null 2>&1; then
+        go_binary="go"
+    elif [[ -n "$GOROOT" ]] && [[ -x "$GOROOT/bin/go" ]]; then
+        go_binary="$GOROOT/bin/go"
+    fi
+    
+    if [[ -z "$go_binary" ]]; then
+        print_error "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Không tìm thấy Go binary để build"; else echo "Cannot find Go binary for building"; fi)"
+        return 1
+    fi
+    
+    # Set up Go environment if not already set
+    if [[ -z "$GOPATH" ]]; then
         export GOPATH="$HOME/go"
         export GOMODCACHE="$GOPATH/pkg/mod"
-        export PATH="$GOROOT/bin:$PATH"
+        mkdir -p "$GOPATH" "$GOMODCACHE"
     fi
+    
+    print_info "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Sử dụng Go"; else echo "Using Go"; fi): $($go_binary version)"
+    print_info "GOPATH: ${GOPATH:-not set}"
+    print_info "GOROOT: ${GOROOT:-system default}"
     
     local temp_dir=$(mktemp -d)
     cd "$temp_dir"
@@ -690,15 +1166,32 @@ build_from_source() {
     fi
     
     print_info "$(text "building_binary")..."
-    go mod tidy
+    
+    # Use full path to go binary if needed
+    local go_cmd="go"
+    if [[ -n "$GOROOT" ]] && [[ -x "$GOROOT/bin/go" ]]; then
+        go_cmd="$GOROOT/bin/go"
+    fi
+    
+    # Initialize and tidy modules
+    $go_cmd mod tidy || {
+        print_warning "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "go mod tidy thất bại, tiếp tục build"; else echo "go mod tidy failed, continuing with build"; fi)"
+    }
     
     local binary_name="$BINARY_NAME"
     if is_windows; then
         binary_name="${BINARY_NAME}.exe"
     fi
     
-    go build -o "$binary_name" .
-    go build -o "dev_tool_v${VERSION}" .
+    # Build with verbose output for debugging
+    print_info "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Đang build binary"; else echo "Building binary"; fi): $binary_name"
+    
+    if ! $go_cmd build -v -o "$binary_name" .; then
+        print_error "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Build thất bại"; else echo "Build failed"; fi)"
+        return 1
+    fi
+    
+    print_success "$(if [[ "$CURRENT_LANG" == "$LANG_VI" ]]; then echo "Build thành công"; else echo "Build successful"; fi): $binary_name"
     
     install_binary "./${binary_name}"
     
